@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>نظام إدارة عيادة النظر</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div id="login-screen" class="login-page">
+    <div class="login-card">
+      <div class="login-icon-badge">🩺</div>
+      <h1 class="login-title">نظام إدارة عيادة النظر</h1>
+      <p class="login-subtitle">سجّل دخولك للمتابعة</p>
+      <div class="login-form-group">
+        <label>اسم المستخدم</label>
+        <input id="login-user" placeholder="أدخل اسم المستخدم">
+      </div>
+      <div class="login-form-group">
+        <label>كلمة المرور</label>
+        <input id="login-pass" type="password" placeholder="أدخل كلمة المرور">
+      </div>
+      <div id="login-error" class="login-error"></div>
+      <button class="login-btn" onclick="doLogin()">تسجيل الدخول</button>
+      <p class="login-hint">أول مرة؟ استخدم <b>admin</b> / <b>admin123</b> ثم غيّرها لاحقًا من تبويب الموظفين</p>
+    </div>
+  </div>
+
+  <div id="app" style="display:none">
+    <div class="topbar">
+      <h1>🩺 نظام إدارة عيادة النظر</h1>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span class="status" id="current-user"></span>
+        <span class="status" id="conn-status">متصل بـ: ...</span>
+        <button class="btn small secondary" onclick="logout()">خروج</button>
+      </div>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div id="content"></div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/print-templates.js"></script>
+  <script src="js/tabs/patients.js"></script>
+  <script src="js/tabs/exams.js"></script>
+  <script src="js/tabs/products.js"></script>
+  <script src="js/tabs/sales.js"></script>
+  <script src="js/tabs/suppliers.js"></script>
+  <script src="js/tabs/purchases.js"></script>
+  <script src="js/tabs/special-orders.js"></script>
+  <script src="js/tabs/cashbox.js"></script>
+  <script src="js/tabs/inventory.js"></script>
+  <script src="js/tabs/employees.js"></script>
+  <script src="js/tabs/reports.js"></script>
+  <script src="js/tabs/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

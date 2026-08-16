@@ -1,0 +1,64 @@
+{
+  "name": "eye-clinic-manager",
+  "productName": "نظام إدارة عيادة النظر",
+  "version": "1.0.0",
+  "description": "برنامج سطح مكتب لإدارة عيادات فحص النظر مع نظام مبيعات ونقاط بيع",
+  "main": "src/main/main.js",
+  "author": "Eye Clinic App",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "build:linux": "electron-builder --linux AppImage --x64"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "electron-store": "^8.2.0",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
+    "node-thermal-printer": "^4.4.4",
+    "pdf-to-printer": "^5.8.0",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.eyeclinic.manager",
+    "productName": "نظام إدارة عيادة النظر",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/pdf-to-printer/**/*"
+    ],
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "language": "1025"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "assets/icon.png",
+      "category": "Office"
+    }
+  }
+}

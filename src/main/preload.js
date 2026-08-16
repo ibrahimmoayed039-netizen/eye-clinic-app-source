@@ -1,0 +1,14 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('desktop', {
+  saveSetup: (config) => ipcRenderer.invoke('setup:save', config),
+  resetSetup: () => ipcRenderer.invoke('setup:reset'),
+  getLocalMode: () => ipcRenderer.invoke('app:getLocalMode'),
+  printThermalImage: (payload) => ipcRenderer.invoke('print:thermalImage', payload),
+  printThermalText: (payload) => ipcRenderer.invoke('print:thermalText', payload),
+  listPrinters: () => ipcRenderer.invoke('printer:list'),
+  testPrinterConnection: (payload) => ipcRenderer.invoke('printer:testConnection', payload),
+  testCodePages: (payload) => ipcRenderer.invoke('printer:codePageTest', payload),
+  printPreview: (payload) => ipcRenderer.invoke('print:preview', payload),
+  printSystem: (silent) => ipcRenderer.invoke('print:system', silent)
+});

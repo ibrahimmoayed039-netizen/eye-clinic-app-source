@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>إعداد النظام</title>
+<style>
+  * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; }
+  body { margin:0; background: linear-gradient(135deg,#0f766e,#134e4a); height:100vh; display:flex; align-items:center; justify-content:center; }
+  .card { background:#fff; border-radius:16px; padding:36px; width:480px; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+  h1 { text-align:center; color:#0f766e; font-size:22px; margin-bottom:6px; }
+  p.sub { text-align:center; color:#666; margin-top:0; margin-bottom:24px; font-size:14px; }
+  .options { display:flex; gap:12px; margin-bottom:20px; }
+  .option { flex:1; border:2px solid #e5e7eb; border-radius:10px; padding:16px; text-align:center; cursor:pointer; transition:.15s; }
+  .option.active { border-color:#0f766e; background:#f0fdfa; }
+  .option h3 { margin:8px 0 4px; font-size:15px; color:#111; }
+  .option p { margin:0; font-size:12px; color:#777; }
+  label { display:block; font-size:13px; color:#333; margin:14px 0 6px; }
+  input { width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px; }
+  button.go { width:100%; margin-top:22px; padding:12px; background:#0f766e; color:#fff; border:none; border-radius:10px; font-size:15px; cursor:pointer; }
+  button.go:hover { background:#0d5f58; }
+  .hint { font-size:12px; color:#888; margin-top:8px; line-height:1.7; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🩺 إعداد نظام إدارة عيادة النظر</h1>
+    <p class="sub">اختر طريقة عمل هذا الجهاز</p>
+    <div class="options">
+      <div class="option active" id="opt-server" onclick="selectMode('server')">
+        <div style="font-size:26px">🖥️</div>
+        <h3>جهاز رئيسي (خادم)</h3>
+        <p>يحتفظ بكل البيانات ويشغّل الخدمة</p>
+      </div>
+      <div class="option" id="opt-client" onclick="selectMode('client')">
+        <div style="font-size:26px">💻</div>
+        <h3>جهاز عميل</h3>
+        <p>يتصل بالجهاز الرئيسي عبر الشبكة</p>
+      </div>
+    </div>
+    <div id="server-fields">
+      <label>رقم المنفذ (Port)</label>
+      <input id="port" value="4500" type="number">
+      <div class="hint">اترك الإعداد الافتراضي إن لم تكن متأكدًا. باقي الأجهزة (العملاء) سيتصلون بعنوان IP الخاص بهذا الجهاز على نفس الشبكة، أو عبر Radmin VPN إن كانت الفروع في أماكن مختلفة.</div>
+    </div>
+    <div id="client-fields" style="display:none">
+      <label>عنوان الجهاز الرئيسي (IP:Port)</label>
+      <input id="serverAddress" placeholder="مثال: 192.168.1.10:4500">
+      <div class="hint">اطلب من الجهاز الرئيسي عنوان الـ IP الخاص به من إعدادات الشبكة، أو من Radmin VPN إن كنتم في فروع مختلفة.</div>
+    </div>
+    <button class="go" onclick="save()">بدء استخدام البرنامج</button>
+  </div>
+<script>
+  let mode = 'server';
+  function selectMode(m) {
+    mode = m;
+    document.getElementById('opt-server').className = 'option' + (m==='server' ? ' active' : '');
+    document.getElementById('opt-client').className = 'option' + (m==='client' ? ' active' : '');
+    document.getElementById('server-fields').style.display = m==='server' ? 'block' : 'none';
+    document.getElementById('client-fields').style.display = m==='client' ? 'block' : 'none';
+  }
+  async function save() {
+    const config = { mode };
+    if (mode === 'server') config.port = parseInt(document.getElementById('port').value) || 4500;
+    else {
+      const addr = document.getElementById('serverAddress').value.trim();
+      if (!addr) { alert('الرجاء إدخال عنوان الجهاز الرئيسي'); return; }
+      config.serverAddress = addr;
+    }
+    await window.desktop.saveSetup(config);
+  }
+</script>
+</body>
+</html>
