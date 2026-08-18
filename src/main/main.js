@@ -1,9 +1,74 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const { execFile } = require('child_process');
 const Store = require('electron-store');
-const { initDatabase } = require('../db/database');
+const { initDatabase, getDb, getDbPath, closeDatabase } = require('../db/database');
 const { startServer } = require('./server');
 const { printThermalImageBuffer, printImageToWindowsPrinter, printCodePageTest, printThermalTextReceipt } = require('./printer');
+
+// ---------- النسخ الاحتياطي التلقائي ----------
+// عند كل تشغيل بوضع "خادم"، ننشئ نسخة احتياطية يومية تلقائية (مرة واحدة كل يوم كحد أقصى)
+// داخل مجلد بيانات المستخدم، ونحتفظ بآخر 14 نسخة فقط ونحذف الأقدم تلقائيًا.
+const AUTO_BACKUP_KEEP_COUNT = 14;
+
+function getAutoBackupDir() {
+  const dir = path.join(app.getPath('userData'), 'backups');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+async function runAutoBackupIfNeeded() {
+  try {
+    const dbPath = getDbPath();
+    if (!dbPath || !fs.existsSync(dbPath)) return;
+    const dir = getAutoBackupDir();
+    const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const target = path.join(dir, `تلقائي-${todayStr}.db`);
+    if (fs.existsSync(target)) return; // أُخذت نسخة اليوم مسبقًا
+
+    await getDb().backup(target);
+
+    // تنظيف: الاحتفاظ بآخر AUTO_BACKUP_KEEP_COUNT نسخة تلقائية فقط
+    const files = fs.readdirSync(dir)
+      .filter(f => f.startsWith('تلقائي-') && f.endsWith('.db'))
+      .map(f => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t);
+    files.slice(AUTO_BACKUP_KEEP_COUNT).forEach(({ f }) => {
+      try { fs.unlinkSync(path.join(dir, f)); } catch (e) { /* تجاهل */ }
+    });
+  } catch (err) {
+    console.error('فشل النسخ الاحتياطي التلقائي:', err.message);
+  }
+}
+
+// جلب قائمة الطابعات المثبّتة على ويندوز مباشرة عبر PowerShell (بإخراج JSON آمن للتحليل).
+// هذا بديل أكثر ثباتًا من مكتبة pdf-to-printer التي قد تفشل بخطأ برمجي غامض
+// (Cannot read properties of undefined (reading 'match')) إذا كان الأمر الداخلي الذي
+// تستخدمه لم يُرجع مخرجات بالشكل المتوقع (بسبب صلاحيات، أو سياسة تنفيذ سكربتات، أو عدم وجود طابعات).
+function getInstalledPrintersViaPowerShell() {
+  return new Promise((resolve, reject) => {
+    const psCommand = 'Get-CimInstance -ClassName Win32_Printer | Select-Object -ExpandProperty Name | ConvertTo-Json -Compress';
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psCommand],
+      { timeout: 10000, windowsHide: true },
+      (err, stdout, stderr) => {
+        if (err) { reject(new Error('تعذّر تشغيل أمر استكشاف الطابعات (PowerShell). تأكد أن PowerShell غير محظور على هذا الجهاز عبر سياسات النظام، أو أدخل اسم الطابعة يدويًا.')); return; }
+        const raw = (stdout || '').trim();
+        if (!raw) { resolve([]); return; }
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) resolve(parsed.filter(Boolean));
+          else if (typeof parsed === 'string') resolve([parsed]);
+          else resolve([]);
+        } catch (parseErr) {
+          reject(new Error('تعذّر قراءة نتيجة استكشاف الطابعات. جرّب إدخال اسم الطابعة يدويًا بدل الاكتشاف التلقائي.'));
+        }
+      }
+    );
+  });
+}
 
 Menu.setApplicationMenu(null);
 
@@ -42,6 +107,7 @@ function createMainWindow() {
     const port = store.get('port') || DEFAULT_PORT;
     initDatabase(app.getPath('userData'));
     startServer(port);
+    runAutoBackupIfNeeded();
     mainWindow.loadURL(`http://localhost:${port}/index.html?apiBase=http://localhost:${port}`);
   } else {
     const serverAddress = store.get('serverAddress');
@@ -112,11 +178,23 @@ ipcMain.handle('print:thermalText', async (event, { invoice, clinic, interfaceTy
 ipcMain.handle('printer:list', async () => {
   try {
     if (process.platform !== 'win32') return { ok: false, error: 'اكتشاف الطابعات متاح فقط على ويندوز. أدخل اسم الطابعة يدويًا.', printers: [] };
-    const { getPrinters } = require('pdf-to-printer');
-    const printers = await getPrinters();
-    return { ok: true, printers: printers.map(p => p.name) };
+    let names = [];
+    try {
+      names = await getInstalledPrintersViaPowerShell();
+    } catch (psErr) {
+      // خطة بديلة: نجرّب مكتبة pdf-to-printer في حال فشل أمر PowerShell المباشر لأي سبب.
+      try {
+        const { getPrinters } = require('pdf-to-printer');
+        const printers = await getPrinters();
+        names = printers.map(p => p.name);
+      } catch (fallbackErr) {
+        return { ok: false, error: psErr.message, printers: [] };
+      }
+    }
+    if (!names.length) return { ok: false, error: 'لم يتم العثور على أي طابعة مثبّتة على هذا الجهاز. تأكد أن الطابعة مثبّتة من لوحة تحكم ويندوز، أو أدخل اسمها يدويًا.', printers: [] };
+    return { ok: true, printers: names };
   } catch (err) {
-    return { ok: false, error: err.message, printers: [] };
+    return { ok: false, error: 'حدث خطأ غير متوقع أثناء اكتشاف الطابعات: ' + err.message, printers: [] };
   }
 });
 
@@ -145,12 +223,21 @@ ipcMain.handle('printer:testConnection', async (event, { interfaceType, address 
       return { ok: true, message: `تم الاتصال بنجاح بالطابعة على ${host}:${port}` };
     } else {
       if (process.platform !== 'win32') return { ok: false, error: 'اختبار طابعات USB متاح فقط على ويندوز.' };
-      const { getPrinters } = require('pdf-to-printer');
-      const printers = await getPrinters();
-      const found = printers.some(p => p.name === address.trim());
+      let names = [];
+      try {
+        names = await getInstalledPrintersViaPowerShell();
+      } catch (psErr) {
+        try {
+          const { getPrinters } = require('pdf-to-printer');
+          names = (await getPrinters()).map(p => p.name);
+        } catch (fallbackErr) {
+          return { ok: false, error: psErr.message };
+        }
+      }
+      const found = names.some(n => n === address.trim());
       if (!found) {
-        const names = printers.map(p => p.name).join('، ') || 'لا توجد طابعات مثبّتة';
-        return { ok: false, error: `لا توجد طابعة بهذا الاسم على الجهاز. الطابعات المتوفرة: ${names}` };
+        const list = names.join('، ') || 'لا توجد طابعات مثبّتة';
+        return { ok: false, error: `لا توجد طابعة بهذا الاسم على الجهاز. الطابعات المتوفرة: ${list}` };
       }
       return { ok: true, message: `الطابعة "${address}" موجودة ومثبّتة على هذا الجهاز.` };
     }
@@ -184,4 +271,121 @@ ipcMain.handle('print:system', async (event, silent) => {
 ipcMain.handle('dialog:selectPrinterFile', async () => {
   const result = await dialog.showSaveDialog({ defaultPath: 'invoice.pdf' });
   return result.filePath;
+});
+
+// ---------- النسخ الاحتياطي والاستعادة (يدوي) ----------
+
+ipcMain.handle('backup:getInfo', async () => {
+  const mode = store.get('mode');
+  if (mode !== 'server') {
+    return { ok: false, error: 'النسخ الاحتياطي متاح فقط على الجهاز الرئيسي (الخادم) الذي يحتفظ بقاعدة البيانات الفعلية.' };
+  }
+  const dbPath = getDbPath();
+  if (!dbPath || !fs.existsSync(dbPath)) return { ok: false, error: 'تعذّر العثور على ملف قاعدة البيانات.' };
+  const stat = fs.statSync(dbPath);
+  const autoDir = getAutoBackupDir();
+  const autoBackups = fs.readdirSync(autoDir)
+    .filter(f => f.startsWith('تلقائي-') && f.endsWith('.db'))
+    .map(f => {
+      const s = fs.statSync(path.join(autoDir, f));
+      return { name: f, sizeBytes: s.size, mtime: s.mtimeMs };
+    })
+    .sort((a, b) => b.mtime - a.mtime);
+  return {
+    ok: true,
+    dbPath,
+    sizeBytes: stat.size,
+    lastModified: stat.mtimeMs,
+    autoBackupDir: autoDir,
+    autoBackups
+  };
+});
+
+ipcMain.handle('backup:openAutoFolder', async () => {
+  const dir = getAutoBackupDir();
+  shell.openPath(dir);
+  return true;
+});
+
+ipcMain.handle('backup:create', async () => {
+  try {
+    const mode = store.get('mode');
+    if (mode !== 'server') return { ok: false, error: 'النسخ الاحتياطي متاح فقط على الجهاز الرئيسي (الخادم).' };
+    const dbPath = getDbPath();
+    if (!dbPath || !fs.existsSync(dbPath)) return { ok: false, error: 'تعذّر العثور على ملف قاعدة البيانات.' };
+
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'حفظ نسخة احتياطية',
+      defaultPath: `نسخة-احتياطية-عيادة-النظر-${stamp}.db`,
+      filters: [{ name: 'ملف قاعدة بيانات', extensions: ['db'] }]
+    });
+    if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+
+    await getDb().backup(result.filePath);
+    return { ok: true, filePath: result.filePath };
+  } catch (err) {
+    return { ok: false, error: 'فشل إنشاء النسخة الاحتياطية: ' + err.message };
+  }
+});
+
+ipcMain.handle('backup:restore', async () => {
+  try {
+    const mode = store.get('mode');
+    if (mode !== 'server') return { ok: false, error: 'الاستعادة متاحة فقط على الجهاز الرئيسي (الخادم).' };
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'اختر ملف النسخة الاحتياطية للاستعادة',
+      properties: ['openFile'],
+      filters: [{ name: 'ملف قاعدة بيانات', extensions: ['db'] }]
+    });
+    if (result.canceled || !result.filePaths || !result.filePaths.length) return { ok: false, canceled: true };
+    const sourcePath = result.filePaths[0];
+
+    // تحقّق أن الملف المختار فعلاً قاعدة بيانات SQLite صالحة (أول 16 بايت من الملف)
+    const fd = fs.openSync(sourcePath, 'r');
+    const headerBuf = Buffer.alloc(16);
+    fs.readSync(fd, headerBuf, 0, 16, 0);
+    fs.closeSync(fd);
+    if (headerBuf.toString('utf8') !== 'SQLite format 3\0') {
+      return { ok: false, error: 'الملف المختار ليس ملف نسخة احتياطية صالحًا (ملف قاعدة بيانات SQLite).' };
+    }
+
+    const confirmResult = await dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      buttons: ['إلغاء', 'نعم، استبدال البيانات'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'تأكيد الاستعادة',
+      message: 'سيتم استبدال كل بيانات البرنامج الحالية بمحتوى النسخة الاحتياطية المختارة. سيُغلق البرنامج ويعيد التشغيل تلقائيًا بعد ذلك.',
+      detail: 'سيتم أخذ نسخة أمان تلقائية من البيانات الحالية قبل الاستبدال، احتياطًا في حال اخترت الملف الخطأ.'
+    });
+    if (confirmResult.response !== 1) return { ok: false, canceled: true };
+
+    const dbPath = getDbPath();
+    const dbDir = path.dirname(dbPath);
+
+    // نسخة أمان تلقائية قبل الاستبدال
+    try {
+      if (fs.existsSync(dbPath)) {
+        await getDb().backup(path.join(getAutoBackupDir(), `قبل-استعادة-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.db`));
+      }
+    } catch (safetyErr) { /* لا نوقف العملية إن فشلت نسخة الأمان */ }
+
+    closeDatabase();
+
+    // حذف ملفات WAL/SHM القديمة المرتبطة بقاعدة البيانات الحالية
+    ['-wal', '-shm'].forEach(suffix => {
+      const p = dbPath + suffix;
+      if (fs.existsSync(p)) { try { fs.unlinkSync(p); } catch (e) { /* تجاهل */ } }
+    });
+
+    fs.copyFileSync(sourcePath, dbPath);
+
+    app.relaunch();
+    app.exit(0);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: 'فشلت عملية الاستعادة: ' + err.message };
+  }
 });

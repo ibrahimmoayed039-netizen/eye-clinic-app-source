@@ -10,5 +10,9 @@ contextBridge.exposeInMainWorld('desktop', {
   testPrinterConnection: (payload) => ipcRenderer.invoke('printer:testConnection', payload),
   testCodePages: (payload) => ipcRenderer.invoke('printer:codePageTest', payload),
   printPreview: (payload) => ipcRenderer.invoke('print:preview', payload),
-  printSystem: (silent) => ipcRenderer.invoke('print:system', silent)
+  printSystem: (silent) => ipcRenderer.invoke('print:system', silent),
+  getBackupInfo: () => ipcRenderer.invoke('backup:getInfo'),
+  createBackup: () => ipcRenderer.invoke('backup:create'),
+  restoreBackup: () => ipcRenderer.invoke('backup:restore'),
+  openAutoBackupFolder: () => ipcRenderer.invoke('backup:openAutoFolder')
 });

@@ -20,7 +20,8 @@
     "node-thermal-printer": "^4.4.4",
     "pdf-to-printer": "^5.8.0",
     "body-parser": "^1.20.2",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "iconv-lite": "^0.4.24"
   },
   "devDependencies": {
     "electron": "^31.3.1",

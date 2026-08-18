@@ -153,6 +153,11 @@ async function renderSettingsTab(container) {
       <button class="btn secondary" onclick="previewInvoiceStyle()">👁️ معاينة الفاتورة بالشكل الحالي</button>
     </div>
 
+    <div class="card" id="backup-card">
+      <h2>💾 النسخ الاحتياطي والاستعادة</h2>
+      <div id="backup-content">جاري التحميل...</div>
+    </div>
+
     <div class="card">
       <h2>🌐 إعدادات الشبكة الحالية</h2>
       <p style="font-size:13px;margin-bottom:8px">وضع هذا الجهاز: <b>${local.mode === 'server' ? 'جهاز رئيسي (خادم)' : 'جهاز عميل'}</b></p>
@@ -161,6 +166,78 @@ async function renderSettingsTab(container) {
     </div>
   `;
   renderPrinterDiscoveryBox();
+  renderBackupCard();
+}
+
+function formatBackupSize(bytes) {
+  if (!bytes && bytes !== 0) return '';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' كيلوبايت';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' ميجابايت';
+}
+
+function formatBackupDate(ms) {
+  if (!ms) return '';
+  return new Date(ms).toLocaleString('ar');
+}
+
+async function renderBackupCard() {
+  const box = document.getElementById('backup-content');
+  const info = await window.desktop.getBackupInfo();
+
+  if (!info.ok) {
+    box.innerHTML = `<p class="hint">${info.error}</p>`;
+    return;
+  }
+
+  const autoRows = info.autoBackups.length
+    ? info.autoBackups.map(b => `
+        <tr>
+          <td>${b.name}</td>
+          <td>${formatBackupSize(b.sizeBytes)}</td>
+          <td>${formatBackupDate(b.mtime)}</td>
+        </tr>`).join('')
+    : `<tr><td colspan="3" style="text-align:center;color:#888">لا توجد نسخ تلقائية بعد — تُنشأ نسخة واحدة تلقائيًا كل يوم عند تشغيل البرنامج.</td></tr>`;
+
+  box.innerHTML = `
+    <p style="font-size:13px;margin-bottom:10px">
+      حجم قاعدة البيانات الحالية: <b>${formatBackupSize(info.sizeBytes)}</b> —
+      آخر تعديل: <b>${formatBackupDate(info.lastModified)}</b>
+    </p>
+    <div class="hint" style="margin-bottom:12px">
+      يأخذ البرنامج نسخة احتياطية تلقائية يومية (يُحتفظ بآخر 14 نسخة) داخل مجلد بيانات البرنامج على هذا الجهاز.
+      هذه النسخ تحميك من عطل البرنامج أو الحذف الخاطئ، لكنها <b>لا تحميك من عطل القرص الصلب نفسه</b> —
+      لذلك يُنصح بأخذ نسخة يدوية بشكل دوري وحفظها في مكان آخر (فلاشة، قرص خارجي، تخزين سحابي).
+    </div>
+    <div class="toolbar" style="margin-bottom:14px">
+      <button class="btn" onclick="createBackupNow()">📥 أخذ نسخة احتياطية الآن (احفظها بمكان تختاره)</button>
+      <button class="btn secondary" onclick="openAutoBackupFolderNow()">📂 فتح مجلد النسخ التلقائية</button>
+      <button class="btn danger" onclick="restoreBackupNow()">♻️ استعادة من نسخة احتياطية</button>
+    </div>
+    <h3 style="font-size:14px;margin-bottom:8px">آخر النسخ التلقائية على هذا الجهاز</h3>
+    <table>
+      <thead><tr><th>اسم الملف</th><th>الحجم</th><th>التاريخ</th></tr></thead>
+      <tbody>${autoRows}</tbody>
+    </table>
+  `;
+}
+
+async function createBackupNow() {
+  const res = await window.desktop.createBackup();
+  if (res.canceled) return;
+  if (res.ok) alert('✅ تم إنشاء النسخة الاحتياطية بنجاح في:\n' + res.filePath);
+  else alert('❌ ' + res.error);
+}
+
+async function openAutoBackupFolderNow() {
+  await window.desktop.openAutoBackupFolder();
+}
+
+async function restoreBackupNow() {
+  if (!confirm('تحذير: ستستبدل هذه العملية كل البيانات الحالية بمحتوى النسخة الاحتياطية المختارة، وسيعاد تشغيل البرنامج تلقائيًا. هل تريد المتابعة؟')) return;
+  const res = await window.desktop.restoreBackup();
+  if (res.canceled) return;
+  if (!res.ok) alert('❌ ' + res.error);
+  // عند النجاح سيُغلق البرنامج ويعيد التشغيل تلقائيًا من نفسه، لا حاجة لأي إجراء إضافي هنا.
 }
 
 async function saveClinicSettings() {

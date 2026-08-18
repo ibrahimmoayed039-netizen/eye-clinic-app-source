@@ -3,11 +3,13 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 
 let db;
+let currentDbPath = null;
 
 function initDatabase(userDataPath) {
   const dbDir = path.join(userDataPath, 'data');
   if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
   const dbPath = path.join(dbDir, 'clinic.db');
+  currentDbPath = dbPath;
 
   db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
@@ -275,4 +277,18 @@ function getDb() {
   return db;
 }
 
-module.exports = { initDatabase, getDb };
+function getDbPath() {
+  return currentDbPath;
+}
+
+// يُستخدم فقط قبل استبدال ملف قاعدة البيانات مباشرة (الاستعادة من نسخة احتياطية).
+// يغلق الاتصال الحالي بأمان (يدمج ملفات WAL) قبل إعادة تشغيل التطبيق.
+function closeDatabase() {
+  if (db) {
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (e) { /* تجاهل */ }
+    db.close();
+    db = null;
+  }
+}
+
+module.exports = { initDatabase, getDb, getDbPath, closeDatabase };
