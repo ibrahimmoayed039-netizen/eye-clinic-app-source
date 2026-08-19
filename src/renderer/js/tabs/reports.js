@@ -28,6 +28,11 @@ async function renderReportsTab(container) {
 let CURRENT_REPORT_ROWS = [];
 let CURRENT_REPORT_TYPE = 'invoices';
 
+function printExamReportFromReport(id) {
+  const r = CURRENT_REPORT_ROWS.find(row => row.id === id);
+  if (r) printExamReport(r);
+}
+
 function filterReportRows() {
   const q = document.getElementById('r-search').value.trim().toLowerCase();
   if (!q) { renderReportTable(CURRENT_REPORT_ROWS); return; }
@@ -108,7 +113,7 @@ function renderReportTable(rows) {
             <td>${r.patient_name||'-'}</td>
             <td>${r.employee_name||'-'}</td>
             <td>${r.diagnosis||'-'}</td>
-            <td><button class="btn small" onclick='printExamReport(${JSON.stringify(r).replace(/'/g, "&apos;")})'>🖨️</button></td>
+            <td><button class="btn small" onclick="printExamReportFromReport(${r.id})">🖨️</button></td>
           </tr>
         `).join('')}</tbody>
       </table>

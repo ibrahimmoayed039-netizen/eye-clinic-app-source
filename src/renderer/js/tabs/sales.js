@@ -373,16 +373,16 @@ async function promptPrintChoice(invoiceId) {
   if (defaultMethod === 'thermal80' && showThermal80) { printInvoiceThermal(invoice, 80); return; }
   if (defaultMethod === 'thermal58' && showThermal58) { printInvoiceThermal(invoice, 58); return; }
 
-  const invoiceJson = JSON.stringify(invoice).replace(/'/g, "&apos;");
+  window.__PRINT_CHOICE_INVOICE = invoice;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal" style="width:380px;text-align:center">
       <h3>✅ تم حفظ الفاتورة رقم ${invoice.invoice_number.replace('INV-', '')}</h3>
       <p style="color:#555;margin-bottom:16px">اختر طريقة الطباعة</p>
-      ${showRegular ? `<button class="btn" style="width:100%;margin-bottom:8px" onclick='printInvoiceRegular(${invoiceJson})'>🖨️ طباعة عادية (معاينة قبل الطباعة)</button>` : ''}
-      ${showThermal80 ? `<button class="btn secondary" style="width:100%;margin-bottom:8px" onclick='printInvoiceThermal(${invoiceJson}, 80)'>🧾 طابعة حرارية 80مم</button>` : ''}
-      ${showThermal58 ? `<button class="btn secondary" style="width:100%;margin-bottom:8px" onclick='printInvoiceThermal(${invoiceJson}, 58)'>🧾 طابعة حرارية 58مم</button>` : ''}
+      ${showRegular ? `<button class="btn" style="width:100%;margin-bottom:8px" onclick="printInvoiceRegular(window.__PRINT_CHOICE_INVOICE)">🖨️ طباعة عادية (معاينة قبل الطباعة)</button>` : ''}
+      ${showThermal80 ? `<button class="btn secondary" style="width:100%;margin-bottom:8px" onclick="printInvoiceThermal(window.__PRINT_CHOICE_INVOICE, 80)">🧾 طابعة حرارية 80مم</button>` : ''}
+      ${showThermal58 ? `<button class="btn secondary" style="width:100%;margin-bottom:8px" onclick="printInvoiceThermal(window.__PRINT_CHOICE_INVOICE, 58)">🧾 طابعة حرارية 58مم</button>` : ''}
       ${(!showRegular && !showThermal80 && !showThermal58) ? `<p class="hint">لا توجد طريقة طباعة مفعّلة حاليًا — فعّلها من تبويب الإعدادات.</p>` : ''}
       <button class="btn secondary" style="width:100%" onclick="this.closest('.modal-overlay').remove()">تخطي</button>
     </div>

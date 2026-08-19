@@ -5,7 +5,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const { getDb } = require('../db/database');
 
-function startServer(port) {
+function startServer(port, onReady) {
   const app = express();
   app.use(cors());
   app.use(express.json());
@@ -745,6 +745,7 @@ function startServer(port) {
 
   server.listen(port, '0.0.0.0', () => {
     console.log(`تم تشغيل الخادم على المنفذ ${port}`);
+    if (typeof onReady === 'function') onReady();
   });
 
   return { app, server, io };

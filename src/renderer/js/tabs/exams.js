@@ -1,5 +1,6 @@
 let examFilterPatientId = null;
 let examFilterPatientName = null;
+let EXAMS_ROWS_CACHE = [];
 
 // ===== توليد قوائم تدرّجات القوة النظرية (من الأقوى سالب إلى الأقوى موجب) =====
 function formatDiopter(val) {
@@ -69,6 +70,7 @@ async function loadExams() {
   let url = `/api/exams?employee_id=${employee_id}&from=${from}&to=${to}`;
   if (examFilterPatientId) url += `&patient_id=${examFilterPatientId}`;
   const rows = await API.get(url);
+  EXAMS_ROWS_CACHE = rows;
 
   const badge = document.getElementById('exam-filter-badge');
   badge.innerHTML = examFilterPatientId ? `<p style="margin-bottom:10px;font-size:13px">🔎 عرض فحوصات: <b>${examFilterPatientName}</b></p>` : '';
@@ -88,8 +90,8 @@ async function loadExams() {
             <td>${e.diagnosis || '-'}</td>
             <td>${e.employee_name || '-'}</td>
             <td>
-              <button class="btn small" onclick='viewExam(${JSON.stringify(e).replace(/'/g, "&apos;")})'>عرض</button>
-              <button class="btn small secondary" onclick='printExamReport(${JSON.stringify(e).replace(/'/g, "&apos;")})'>🖨️ طباعة</button>
+              <button class="btn small" onclick="viewExamById(${e.id})">عرض</button>
+              <button class="btn small secondary" onclick="printExamReportById(${e.id})">🖨️ طباعة</button>
               <button class="btn small danger" onclick="deleteExam(${e.id})">حذف</button>
             </td>
           </tr>
@@ -103,6 +105,15 @@ async function deleteExam(id) {
   if (!confirm('حذف هذا الفحص؟')) return;
   await API.del(`/api/exams/${id}`);
   loadExams();
+}
+
+function viewExamById(id) {
+  const e = EXAMS_ROWS_CACHE.find(r => r.id === id);
+  if (e) viewExam(e);
+}
+function printExamReportById(id) {
+  const e = EXAMS_ROWS_CACHE.find(r => r.id === id);
+  if (e) printExamReport(e);
 }
 
 function viewExam(e) {
@@ -131,7 +142,7 @@ function viewExam(e) {
       <div class="form-group"><label>موعد المراجعة القادم</label><div>${e.next_visit_date || '-'}</div></div>
       <div class="modal-actions">
         <button class="btn secondary" onclick="this.closest('.modal-overlay').remove()">إغلاق</button>
-        <button class="btn" onclick='printExamReport(${JSON.stringify(e).replace(/'/g, "&apos;")})'>🖨️ طباعة</button>
+        <button class="btn" onclick="printExamReportById(${e.id})">🖨️ طباعة</button>
       </div>
     </div>
   `;

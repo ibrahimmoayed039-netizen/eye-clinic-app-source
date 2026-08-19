@@ -97,7 +97,10 @@ function createMainWindow() {
     }
   });
   mainWindow.setMenu(null);
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
 
   const mode = store.get('mode');
 
@@ -106,9 +109,12 @@ function createMainWindow() {
   } else if (mode === 'server') {
     const port = store.get('port') || DEFAULT_PORT;
     initDatabase(app.getPath('userData'));
-    startServer(port);
+    console.log('مسار قاعدة البيانات المستخدمة:', getDbPath());
+    console.log('مسار بيانات البرنامج (userData):', app.getPath('userData'));
     runAutoBackupIfNeeded();
-    mainWindow.loadURL(`http://localhost:${port}/index.html?apiBase=http://localhost:${port}`);
+    startServer(port, () => {
+      mainWindow.loadURL(`http://localhost:${port}/index.html?apiBase=http://localhost:${port}`);
+    });
   } else {
     const serverAddress = store.get('serverAddress');
     mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
@@ -253,7 +259,10 @@ ipcMain.handle('print:preview', async (event, { htmlContent, title }) => {
     webPreferences: { contextIsolation: true }
   });
   previewWindow.setMenu(null);
-  previewWindow.once('ready-to-show', () => previewWindow.show());
+  previewWindow.once('ready-to-show', () => {
+    previewWindow.show();
+    previewWindow.focus();
+  });
   const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent);
   previewWindow.loadURL(dataUrl);
   return true;

@@ -203,6 +203,10 @@ async function renderBackupCard() {
       حجم قاعدة البيانات الحالية: <b>${formatBackupSize(info.sizeBytes)}</b> —
       آخر تعديل: <b>${formatBackupDate(info.lastModified)}</b>
     </p>
+    <p style="font-size:12px;margin-bottom:10px;color:#555;word-break:break-all">
+      📁 مسار ملف قاعدة البيانات على هذا الجهاز: <code>${info.dbPath}</code><br>
+      <span style="color:#999">إذا تغيّر هذا المسار بين مرة وأخرى، فهذا يعني أن الإعدادات/البيانات تُحفظ في مكان مختلف كل مرة ولهذا تبدو أنها "ترجع للوضع الطبيعي" بعد الإغلاق.</span>
+    </p>
     <div class="hint" style="margin-bottom:12px">
       يأخذ البرنامج نسخة احتياطية تلقائية يومية (يُحتفظ بآخر 14 نسخة) داخل مجلد بيانات البرنامج على هذا الجهاز.
       هذه النسخ تحميك من عطل البرنامج أو الحذف الخاطئ، لكنها <b>لا تحميك من عطل القرص الصلب نفسه</b> —
@@ -241,22 +245,30 @@ async function restoreBackupNow() {
 }
 
 async function saveClinicSettings() {
-  await API.post('/api/settings', {
-    clinic_name: document.getElementById('st-clinic-name').value,
-    clinic_phone: document.getElementById('st-clinic-phone').value,
-    clinic_address: document.getElementById('st-clinic-address').value,
-  });
-  alert('تم الحفظ بنجاح');
+  try {
+    await API.post('/api/settings', {
+      clinic_name: document.getElementById('st-clinic-name').value,
+      clinic_phone: document.getElementById('st-clinic-phone').value,
+      clinic_address: document.getElementById('st-clinic-address').value,
+    });
+    alert('تم الحفظ بنجاح');
+  } catch (e) {
+    alert('❌ تعذّر الحفظ:\n' + e.message);
+  }
 }
 
 async function savePrinterSettings() {
-  await API.post('/api/settings', {
-    printer_interface: document.getElementById('st-printer-interface').value,
-    printer_address: document.getElementById('st-printer-address').value,
-    thermal_print_mode: document.getElementById('st-thermal-mode').value,
-    thermal_code_page: document.getElementById('st-thermal-codepage').value,
-  });
-  alert('تم حفظ إعدادات الطابعة');
+  try {
+    await API.post('/api/settings', {
+      printer_interface: document.getElementById('st-printer-interface').value,
+      printer_address: document.getElementById('st-printer-address').value,
+      thermal_print_mode: document.getElementById('st-thermal-mode').value,
+      thermal_code_page: document.getElementById('st-thermal-codepage').value,
+    });
+    alert('تم حفظ إعدادات الطابعة');
+  } catch (e) {
+    alert('❌ تعذّر حفظ إعدادات الطابعة:\n' + e.message);
+  }
 }
 
 function onThermalModeChange() {
