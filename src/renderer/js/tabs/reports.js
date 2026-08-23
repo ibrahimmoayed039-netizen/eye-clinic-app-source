@@ -143,7 +143,7 @@ async function goToPatientInvoices(patientName) {
 }
 
 function printCurrentReport() {
-  if (!CURRENT_REPORT_ROWS.length) { alert('لا توجد بيانات لطباعتها'); return; }
+  if (!CURRENT_REPORT_ROWS.length) { showAlertModal('لا توجد بيانات لطباعتها'); return; }
   API.get('/api/settings').then(settings => {
     let html;
     if (CURRENT_REPORT_TYPE === 'invoices') {

@@ -14,5 +14,8 @@ contextBridge.exposeInMainWorld('desktop', {
   getBackupInfo: () => ipcRenderer.invoke('backup:getInfo'),
   createBackup: () => ipcRenderer.invoke('backup:create'),
   restoreBackup: () => ipcRenderer.invoke('backup:restore'),
-  openAutoBackupFolder: () => ipcRenderer.invoke('backup:openAutoFolder')
+  openAutoBackupFolder: () => ipcRenderer.invoke('backup:openAutoFolder'),
+  getLicenseStatus: () => ipcRenderer.invoke('license:status'),
+  activateLicense: (key) => ipcRenderer.invoke('license:activate', key),
+  relaunchApp: () => ipcRenderer.invoke('license:relaunch')
 });

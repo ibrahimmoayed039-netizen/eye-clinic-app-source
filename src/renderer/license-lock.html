@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>تفعيل البرنامج</title>
+<style>
+  * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; }
+  body { margin:0; background: linear-gradient(135deg,#0f766e,#134e4a); height:100vh; display:flex; align-items:center; justify-content:center; }
+  .card { background:#fff; border-radius:16px; padding:36px; width:460px; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+  h1 { text-align:center; color:#b91c1c; font-size:20px; margin-bottom:6px; }
+  p.sub { text-align:center; color:#666; margin-top:0; margin-bottom:22px; font-size:13px; line-height:1.8; }
+  label { display:block; font-size:13px; color:#333; margin:14px 0 6px; }
+  input { width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px; font-family:monospace; text-align:center; letter-spacing:1px; }
+  .device-box { background:#f4f6f7; border:1px dashed #ccc; border-radius:8px; padding:10px 12px; font-family:monospace; font-size:15px; text-align:center; letter-spacing:2px; user-select:all; color:#0f766e; }
+  button.go { width:100%; margin-top:18px; padding:12px; background:#0f766e; color:#fff; border:none; border-radius:10px; font-size:15px; cursor:pointer; }
+  button.go:hover { background:#0d5f58; }
+  .msg { margin-top:12px; font-size:13px; text-align:center; min-height:18px; }
+  .msg.error { color:#b91c1c; }
+  .msg.ok { color:#0f766e; }
+  .hint { font-size:12px; color:#888; margin-top:14px; line-height:1.8; text-align:center; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔒 انتهت الفترة التجريبية</h1>
+    <p class="sub">انتهت مدة الاستخدام التجريبي للبرنامج (٣ أيام). لمتابعة الاستخدام، الرجاء إرسال رمز الجهاز أدناه للحصول على مفتاح تفعيل، ثم إدخاله هنا.</p>
+
+    <label>رمز هذا الجهاز (أرسله للمطوّر)</label>
+    <div class="device-box" id="device-id">...</div>
+
+    <label>مفتاح التفعيل</label>
+    <input id="license-key" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX">
+
+    <button class="go" onclick="activate()">تفعيل البرنامج</button>
+    <div class="msg" id="msg"></div>
+
+    <div class="hint">للتواصل والحصول على مفتاح التفعيل: إبراهيم مؤيد محمود — مكتب المسار الذهبي</div>
+  </div>
+<script>
+  async function init() {
+    const status = await window.desktop.getLicenseStatus();
+    document.getElementById('device-id').textContent = status.deviceId;
+  }
+  async function activate() {
+    const key = document.getElementById('license-key').value.trim();
+    const msg = document.getElementById('msg');
+    if (!key) { msg.textContent = 'الرجاء إدخال مفتاح التفعيل'; msg.className = 'msg error'; return; }
+    const result = await window.desktop.activateLicense(key);
+    if (result.ok) {
+      msg.textContent = 'تم التفعيل بنجاح، جاري إعادة تشغيل البرنامج...';
+      msg.className = 'msg ok';
+      setTimeout(() => window.desktop.relaunchApp(), 900);
+    } else {
+      msg.textContent = result.error || 'مفتاح غير صحيح';
+      msg.className = 'msg error';
+    }
+  }
+  init();
+</script>
+</body>
+</html>

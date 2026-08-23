@@ -85,12 +85,12 @@ async function loadClosedBoxes() {
 async function openNewCashbox() {
   const employee_id = document.getElementById('cb-employee').value;
   const opening_balance = parseFloat(document.getElementById('cb-opening').value) || 0;
-  if (!employee_id) { alert('الرجاء اختيار الموظف'); return; }
+  if (!employee_id) { showAlertModal('الرجاء اختيار الموظف'); return; }
   try {
     await API.post('/api/cashboxes', { employee_id, opening_balance });
     renderCashboxTab(document.getElementById('content'));
   } catch (err) {
-    alert('تعذر فتح الصندوق: ' + err.message);
+    showAlertModal('تعذر فتح الصندوق: ' + err.message);
   }
 }
 
@@ -99,13 +99,13 @@ async function addCashMovement(boxId, type) {
   const amountStr = await showPromptModal(`${label}:`, '0');
   if (amountStr === null) return;
   const amount = parseFloat(amountStr);
-  if (!amount || amount <= 0) { alert('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
+  if (!amount || amount <= 0) { showAlertModal('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
   const reason = await showPromptModal('السبب (اختياري):', '');
   try {
     await API.post(`/api/cashboxes/${boxId}/movements`, { type, amount, reason: reason || '' });
     renderCashboxTab(document.getElementById('content'));
   } catch (err) {
-    alert('تعذر تسجيل الحركة: ' + err.message);
+    showAlertModal('تعذر تسجيل الحركة: ' + err.message);
   }
 }
 
@@ -149,12 +149,12 @@ async function closeCashbox(boxId) {
   const input = await showPromptModal(`المبلغ المتوقع بالصندوق: ${box.expected_balance.toLocaleString('ar')} د.ع<br>أدخل المبلغ الفعلي بعد العد اليدوي:`, box.expected_balance);
   if (input === null) return;
   const closing_balance = parseFloat(input);
-  if (isNaN(closing_balance)) { alert('الرجاء إدخال رقم صحيح'); return; }
+  if (isNaN(closing_balance)) { showAlertModal('الرجاء إدخال رقم صحيح'); return; }
   try {
     await API.post(`/api/cashboxes/${boxId}/close`, { closing_balance });
     renderCashboxTab(document.getElementById('content'));
   } catch (err) {
-    alert('تعذر إغلاق الصندوق: ' + err.message);
+    showAlertModal('تعذر إغلاق الصندوق: ' + err.message);
   }
 }
 
@@ -223,19 +223,19 @@ async function saveExpense() {
     notes: document.getElementById('ex-notes').value.trim(),
     employee_id: CURRENT_USER.id,
   };
-  if (!data.description) { alert('الرجاء إدخال وصف المصروف'); return; }
-  if (data.amount <= 0) { alert('الرجاء إدخال مبلغ صحيح'); return; }
+  if (!data.description) { showAlertModal('الرجاء إدخال وصف المصروف'); return; }
+  if (data.amount <= 0) { showAlertModal('الرجاء إدخال مبلغ صحيح'); return; }
   try {
     await API.post('/api/expenses', data);
     document.querySelector('.modal-overlay').remove();
     loadExpenses();
   } catch (err) {
-    alert('تعذر حفظ المصروف: ' + err.message);
+    showAlertModal('تعذر حفظ المصروف: ' + err.message);
   }
 }
 
 async function deleteExpense(id) {
-  if (!confirm('حذف هذا المصروف؟')) return;
+  if (!(await showConfirmModal('حذف هذا المصروف؟'))) return;
   await API.del(`/api/expenses/${id}`);
   loadExpenses();
 }

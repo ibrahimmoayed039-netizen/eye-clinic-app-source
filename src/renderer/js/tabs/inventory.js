@@ -33,7 +33,7 @@ async function loadStockTakes() {
 }
 
 async function startNewStockTake() {
-  if (!confirm('سيتم إنشاء جلسة جرد جديدة تشمل كل المنتجات الحالية بالمخزون. متابعة؟')) return;
+  if (!(await showConfirmModal('سيتم إنشاء جلسة جرد جديدة تشمل كل المنتجات الحالية بالمخزون. متابعة؟'))) return;
   const result = await API.post('/api/stocktakes', { employee_id: CURRENT_USER.id });
   openStockTakeDetails(result.id);
 }
@@ -83,17 +83,17 @@ async function updateStockTakeItem(stId, itemId, value, systemQty) {
     const diffCell = document.getElementById(`diff-${itemId}`);
     diffCell.innerHTML = counted_qty !== null ? formatStockDiff(counted_qty - systemQty) : '-';
   } catch (err) {
-    alert('تعذر حفظ الكمية المعدودة: ' + err.message);
+    showAlertModal('تعذر حفظ الكمية المعدودة: ' + err.message);
   }
 }
 
 async function completeStockTake(id) {
-  if (!confirm('سيتم تحديث كميات المخزون فعليًا حسب الأعداد المُدخلة. لا يمكن التراجع عن هذا الإجراء. متابعة؟')) return;
+  if (!(await showConfirmModal('سيتم تحديث كميات المخزون فعليًا حسب الأعداد المُدخلة. لا يمكن التراجع عن هذا الإجراء. متابعة؟'))) return;
   try {
     await API.post(`/api/stocktakes/${id}/complete`);
-    alert('✅ تم إنهاء الجرد وتحديث المخزون بنجاح');
+    showAlertModal('✅ تم إنهاء الجرد وتحديث المخزون بنجاح');
     openStockTakeDetails(id);
   } catch (err) {
-    alert('تعذر إنهاء الجرد: ' + err.message);
+    showAlertModal('تعذر إنهاء الجرد: ' + err.message);
   }
 }

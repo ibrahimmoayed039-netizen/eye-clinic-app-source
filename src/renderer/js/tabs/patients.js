@@ -46,7 +46,7 @@ function goToExamsFor(id, name) {
 }
 
 async function deletePatient(id) {
-  if (!confirm('هل أنت متأكد من حذف هذا المريض؟')) return;
+  if (!(await showConfirmModal('هل أنت متأكد من حذف هذا المريض؟'))) return;
   await API.del(`/api/patients/${id}`);
   loadPatients();
 }
@@ -152,7 +152,7 @@ async function savePatient(id) {
     address: document.getElementById('f-address').value.trim(),
     notes: document.getElementById('f-notes').value.trim(),
   };
-  if (!data.full_name) { alert('الرجاء إدخال اسم المريض'); return; }
+  if (!data.full_name) { showAlertModal('الرجاء إدخال اسم المريض'); return; }
   try {
     let newId = id;
     if (id) {
@@ -168,6 +168,6 @@ async function savePatient(id) {
     }
     PATIENT_MODAL_CALLBACK = null;
   } catch (err) {
-    alert('تعذر حفظ بيانات المريض: ' + err.message);
+    showAlertModal('تعذر حفظ بيانات المريض: ' + err.message);
   }
 }

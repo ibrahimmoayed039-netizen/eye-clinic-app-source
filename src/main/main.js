@@ -1,11 +1,101 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
 const Store = require('electron-store');
 const { initDatabase, getDb, getDbPath, closeDatabase } = require('../db/database');
 const { startServer } = require('./server');
 const { printThermalImageBuffer, printImageToWindowsPrinter, printCodePageTest, printThermalTextReceipt } = require('./printer');
+
+// ---------- نظام التفعيل والفترة التجريبية ----------
+// فترة تجريبية 3 أيام من أول تشغيل، ثم يتوقف البرنامج عن العمل حتى إدخال مفتاح تفعيل صحيح.
+// المفتاح مرتبط بجهاز العميل (device ID) عبر HMAC-SHA256، ويُولَّد فقط من أداة المطوّر
+// المنفصلة dev-tools/keygen.js التي تشارك نفس القيمة السرّية LICENSE_SECRET أدناه.
+// ⚠️ يجب تغيير هذه القيمة السرية قبل التسليم النهائي للعميل، وتحديث نفس القيمة في keygen.js.
+const LICENSE_SECRET = 'NHk6rbUAbBXSafpzWyZgioOAglOH9B';
+const TRIAL_DAYS = 3;
+
+function getDeviceId() {
+  const nets = os.networkInterfaces();
+  let mac = '';
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      if (!net.internal && net.mac && net.mac !== '00:00:00:00:00:00') { mac = net.mac; break; }
+    }
+    if (mac) break;
+  }
+  const raw = `${os.hostname()}|${mac}|${os.platform()}|${os.arch()}`;
+  return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16).toUpperCase();
+}
+
+function signValue(str) {
+  return crypto.createHmac('sha256', LICENSE_SECRET).update(str).digest('hex');
+}
+
+function normalizeKey(k) {
+  return (k || '').toUpperCase().replace(/[^A-F0-9]/g, '');
+}
+
+function computeExpectedKey(deviceId) {
+  return normalizeKey(crypto.createHmac('sha256', LICENSE_SECRET).update(deviceId).digest('hex').slice(0, 20));
+}
+
+function isValidLicenseKey(deviceId, enteredKey) {
+  return normalizeKey(enteredKey) === computeExpectedKey(deviceId);
+}
+
+// علامة مخفية إضافية بمعزل عن ملف إعدادات electron-store، حتى لا يكفي حذف/تعديل
+// ملف الإعدادات وحده لإعادة ضبط تاريخ بداية الفترة التجريبية.
+function getMarkerPath() {
+  return path.join(app.getPath('userData'), '.sysdata');
+}
+
+function readMarkerFirstRun(deviceId) {
+  try {
+    const raw = fs.readFileSync(getMarkerPath(), 'utf8');
+    const data = JSON.parse(raw);
+    if (data && data.firstRun && data.sig === signValue(deviceId + '|' + data.firstRun)) return data.firstRun;
+  } catch (e) { /* لا يوجد ملف بعد، أو تالف/متلاعب به */ }
+  return null;
+}
+
+function writeMarkerFirstRun(deviceId, firstRun) {
+  try {
+    const p = getMarkerPath();
+    fs.writeFileSync(p, JSON.stringify({ firstRun, sig: signValue(deviceId + '|' + firstRun) }));
+    if (process.platform === 'win32') execFile('attrib', ['+h', p], () => {});
+  } catch (e) { /* تجاهل */ }
+}
+
+function getLicenseStatus(store) {
+  const deviceId = getDeviceId();
+  const savedKey = store.get('license.key');
+  if (savedKey && isValidLicenseKey(deviceId, savedKey)) {
+    return { activated: true, deviceId };
+  }
+
+  const now = Date.now();
+  const storeFirstRun = store.get('license.firstRun');
+  const storeValid = storeFirstRun && store.get('license.sig') === signValue(deviceId + '|' + storeFirstRun);
+  const markerFirstRun = readMarkerFirstRun(deviceId);
+
+  let firstRun;
+  if (storeValid && markerFirstRun) firstRun = Math.min(storeFirstRun, markerFirstRun);
+  else if (storeValid) firstRun = storeFirstRun;
+  else if (markerFirstRun) firstRun = markerFirstRun;
+  else firstRun = now; // أول تشغيل فعلي للبرنامج على هذا الجهاز
+
+  // إعادة كتابة كِلا المصدرين متزامنَين على القيمة المعتمدة
+  store.set('license.firstRun', firstRun);
+  store.set('license.sig', signValue(deviceId + '|' + firstRun));
+  writeMarkerFirstRun(deviceId, firstRun);
+
+  const daysUsed = (now - firstRun) / (1000 * 60 * 60 * 24);
+  const daysLeft = Math.max(0, Math.ceil(TRIAL_DAYS - daysUsed));
+  return { activated: false, deviceId, daysLeft, expired: daysUsed >= TRIAL_DAYS };
+}
 
 // ---------- النسخ الاحتياطي التلقائي ----------
 // عند كل تشغيل بوضع "خادم"، ننشئ نسخة احتياطية يومية تلقائية (مرة واحدة كل يوم كحد أقصى)
@@ -102,6 +192,12 @@ function createMainWindow() {
     mainWindow.focus();
   });
 
+  const license = getLicenseStatus(store);
+  if (license.expired) {
+    mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'license-lock.html'));
+    return;
+  }
+
   const mode = store.get('mode');
 
   if (!mode) {
@@ -137,6 +233,22 @@ ipcMain.handle('setup:save', (event, config) => {
 });
 
 ipcMain.handle('setup:reset', () => { store.clear(); return true; });
+
+ipcMain.handle('license:status', () => getLicenseStatus(store));
+
+ipcMain.handle('license:activate', (event, key) => {
+  const deviceId = getDeviceId();
+  if (!isValidLicenseKey(deviceId, key)) {
+    return { ok: false, error: 'مفتاح التفعيل غير صحيح لهذا الجهاز.' };
+  }
+  store.set('license.key', (key || '').trim());
+  return { ok: true };
+});
+
+ipcMain.handle('license:relaunch', () => {
+  app.relaunch();
+  app.exit(0);
+});
 
 ipcMain.handle('app:getLocalMode', () => {
   return { mode: store.get('mode'), port: store.get('port'), serverAddress: store.get('serverAddress') };

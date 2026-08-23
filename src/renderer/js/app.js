@@ -54,8 +54,62 @@ function applyUiFontSizeClass(size) {
   document.body.classList.add('ui-font-' + (size || 'medium'));
 }
 
+// نوافذ رسائل مخصّصة (alert/confirm/prompt) بديلة عن نوافذ المتصفح الأصلية.
+// السبب: نوافذ window.alert()/confirm()/prompt() الأصلية في Electron على ويندوز
+// تسبب أحيانًا تعليق تركيز لوحة المفاتيح على النافذة الرئيسية بعد إغلاقها
+// (خصوصًا عند عدم وجود شريط قوائم للنافذة)، فيتوقف البرنامج عن قبول أي إدخال نصوص
+// بعدها حتى يضغط المستخدم بالماوس على الشاشة يدويًا. لتفادي هذه المشكلة تمامًا
+// نستخدم نوافذ HTML مخصّصة بنفس شكل النظام بدلًا من الاعتماد على نوافذ المتصفح.
+
+function showAlertModal(message) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" style="width:380px">
+        <h3 style="white-space:pre-line">${message}</h3>
+        <div class="modal-actions">
+          <button class="btn" id="alert-modal-ok">حسنًا</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const okBtn = overlay.querySelector('#alert-modal-ok');
+    okBtn.focus();
+    const cleanup = () => { overlay.remove(); resolve(true); };
+    okBtn.onclick = cleanup;
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === 'Escape') cleanup();
+    });
+  });
+}
+
+function showConfirmModal(message) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" style="width:380px">
+        <h3 style="white-space:pre-line">${message}</h3>
+        <div class="modal-actions">
+          <button class="btn secondary" id="confirm-modal-cancel">إلغاء</button>
+          <button class="btn" id="confirm-modal-ok">موافق</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#confirm-modal-ok').focus();
+    const cleanup = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector('#confirm-modal-ok').onclick = () => cleanup(true);
+    overlay.querySelector('#confirm-modal-cancel').onclick = () => cleanup(false);
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') cleanup(true);
+      if (e.key === 'Escape') cleanup(false);
+    });
+  });
+}
+
 // نافذة إدخال نص مخصصة — بديل ضروري لأن window.prompt() غير مدعوم فعليًا في Electron
-// (على عكس alert() و confirm() المدعومتين عبر نوافذ نظام حقيقية)
 function showPromptModal(title, defaultValue) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');

@@ -40,13 +40,13 @@ async function loadEmployees() {
 }
 
 async function deleteEmployee(id, name) {
-  if (!confirm(`هل تريد حذف الموظف "${name}"؟`)) return;
+  if (!(await showConfirmModal(`هل تريد حذف الموظف "${name}"؟`))) return;
   try {
     const res = await API.del(`/api/employees/${id}`);
-    if (res.deactivatedInstead) alert('هذا الموظف له فواتير/فحوصات سابقة، تم إيقافه بدل حذفه للحفاظ على سلامة السجلات.');
+    if (res.deactivatedInstead) showAlertModal('هذا الموظف له فواتير/فحوصات سابقة، تم إيقافه بدل حذفه للحفاظ على سلامة السجلات.');
     loadEmployees();
   } catch (err) {
-    alert('تعذر حذف الموظف: ' + err.message);
+    showAlertModal('تعذر حذف الموظف: ' + err.message);
   }
 }
 
@@ -89,7 +89,7 @@ async function saveEmployee(id) {
   const full_name = document.getElementById('em-name').value.trim();
   const role = document.getElementById('em-role').value;
   const phone = document.getElementById('em-phone').value.trim();
-  if (!full_name) { alert('الرجاء إدخال الاسم'); return; }
+  if (!full_name) { showAlertModal('الرجاء إدخال الاسم'); return; }
   try {
     if (id) {
       const active = document.getElementById('em-active').value;
@@ -97,12 +97,12 @@ async function saveEmployee(id) {
     } else {
       const username = document.getElementById('em-username').value.trim();
       const password = document.getElementById('em-password').value.trim() || '123456';
-      if (!username) { alert('الرجاء إدخال اسم المستخدم'); return; }
+      if (!username) { showAlertModal('الرجاء إدخال اسم المستخدم'); return; }
       await API.post('/api/employees', { full_name, username, password, role, phone });
     }
     document.querySelector('.modal-overlay').remove();
     loadEmployees();
   } catch (err) {
-    alert('تعذر حفظ بيانات الموظف: ' + err.message);
+    showAlertModal('تعذر حفظ بيانات الموظف: ' + err.message);
   }
 }

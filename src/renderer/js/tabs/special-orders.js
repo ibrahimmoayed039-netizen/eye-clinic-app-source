@@ -95,22 +95,22 @@ function specialOrderActionButtons(o) {
 
 async function advanceSpecialOrderStatus(id, status) {
   const confirmMsg = status === 'ملغاة' ? 'هل تريد إلغاء هذا الطلب؟' : null;
-  if (confirmMsg && !confirm(confirmMsg)) return;
+  if (confirmMsg && !(await showConfirmModal(confirmMsg))) return;
   try {
     await API.post(`/api/special-orders/${id}/status`, { status });
     loadSpecialOrders();
   } catch (err) {
-    alert('تعذر تحديث حالة الطلب: ' + err.message);
+    showAlertModal('تعذر تحديث حالة الطلب: ' + err.message);
   }
 }
 
 async function deleteSpecialOrder(id) {
-  if (!confirm('حذف هذا الطلب الخاص نهائيًا؟')) return;
+  if (!(await showConfirmModal('حذف هذا الطلب الخاص نهائيًا؟'))) return;
   try {
     await API.del(`/api/special-orders/${id}`);
     loadSpecialOrders();
   } catch (err) {
-    alert('تعذر حذف الطلب: ' + err.message);
+    showAlertModal('تعذر حذف الطلب: ' + err.message);
   }
 }
 
@@ -186,8 +186,8 @@ function selectSpecialOrderPatient(id, name, phone) {
 async function submitNewSpecialOrder() {
   const customerName = document.getElementById('so-customer-search').value.trim();
   const itemDesc = document.getElementById('so-item-desc').value.trim();
-  if (!customerName) { alert('الرجاء إدخال اسم الزبون'); return; }
-  if (!itemDesc) { alert('الرجاء إدخال وصف القطعة المطلوبة'); return; }
+  if (!customerName) { showAlertModal('الرجاء إدخال اسم الزبون'); return; }
+  if (!itemDesc) { showAlertModal('الرجاء إدخال وصف القطعة المطلوبة'); return; }
   const payload = {
     patient_id: SO_SELECTED_PATIENT ? SO_SELECTED_PATIENT.id : null,
     customer_name: customerName,
@@ -205,7 +205,7 @@ async function submitNewSpecialOrder() {
     await printSpecialOrderReceipt(result.id);
     loadSpecialOrders();
   } catch (err) {
-    alert('تعذر حفظ الطلب: ' + err.message);
+    showAlertModal('تعذر حفظ الطلب: ' + err.message);
   }
 }
 
@@ -265,14 +265,14 @@ async function submitDeliverSpecialOrder(id) {
     paid_amount: parseFloat(document.getElementById('do-paid').value) || 0,
     employee_id: CURRENT_USER.id,
   };
-  if (isNaN(payload.unit_price) || payload.unit_price < 0) { alert('الرجاء إدخال سعر بيع صحيح'); return; }
+  if (isNaN(payload.unit_price) || payload.unit_price < 0) { showAlertModal('الرجاء إدخال سعر بيع صحيح'); return; }
   try {
     const result = await API.post(`/api/special-orders/${id}/deliver`, payload);
     document.querySelector('.modal-overlay')?.remove();
-    alert(`✅ تم تسليم الطلب وإصدار فاتورة رقم ${result.invoice_number.replace('INV-', '')} بنجاح`);
+    showAlertModal(`✅ تم تسليم الطلب وإصدار فاتورة رقم ${result.invoice_number.replace('INV-', '')} بنجاح`);
     await promptPrintChoice(result.invoice_id);
     loadSpecialOrders();
   } catch (err) {
-    alert('تعذر تسليم الطلب: ' + err.message);
+    showAlertModal('تعذر تسليم الطلب: ' + err.message);
   }
 }

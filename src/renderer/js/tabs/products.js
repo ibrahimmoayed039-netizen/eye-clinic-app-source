@@ -56,7 +56,7 @@ async function loadProducts() {
 }
 
 async function deleteProduct(id) {
-  if (!confirm('حذف هذا المنتج؟')) return;
+  if (!(await showConfirmModal('حذف هذا المنتج؟'))) return;
   await API.del(`/api/products/${id}`);
   loadProducts();
 }
@@ -103,12 +103,12 @@ async function addCategory() {
     input.value = '';
     renderCategoryList();
   } catch (err) {
-    alert('تعذر إضافة الفئة: ' + err.message);
+    showAlertModal('تعذر إضافة الفئة: ' + err.message);
   }
 }
 
 async function deleteCategory(id) {
-  if (!confirm('حذف هذه الفئة؟')) return;
+  if (!(await showConfirmModal('حذف هذه الفئة؟'))) return;
   await API.del(`/api/categories/${id}`);
   renderCategoryList();
 }
@@ -122,7 +122,7 @@ async function addCategoryInline() {
     const opt = document.createElement('option');
     opt.value = cat.name; opt.textContent = cat.name; opt.selected = true;
     select.appendChild(opt);
-  }).catch(err => alert('تعذر إضافة الفئة: ' + err.message));
+  }).catch(err => showAlertModal('تعذر إضافة الفئة: ' + err.message));
 }
 
 async function openProductModal(id) {
@@ -169,14 +169,14 @@ async function saveProduct(id) {
     price: parseFloat(document.getElementById('pf-price').value) || 0,
     cost: parseFloat(document.getElementById('pf-cost').value) || 0,
   };
-  if (!data.name) { alert('الرجاء إدخال اسم المنتج'); return; }
-  if (data.price < 0 || data.cost < 0 || data.stock_qty < 0) { alert('لا يمكن أن يكون السعر أو التكلفة أو الكمية بقيمة سالبة'); return; }
+  if (!data.name) { showAlertModal('الرجاء إدخال اسم المنتج'); return; }
+  if (data.price < 0 || data.cost < 0 || data.stock_qty < 0) { showAlertModal('لا يمكن أن يكون السعر أو التكلفة أو الكمية بقيمة سالبة'); return; }
   try {
     if (id) await API.put(`/api/products/${id}`, data);
     else await API.post('/api/products', data);
     document.querySelector('.modal-overlay').remove();
     loadProducts();
   } catch (err) {
-    alert('تعذر حفظ المنتج: ' + err.message);
+    showAlertModal('تعذر حفظ المنتج: ' + err.message);
   }
 }

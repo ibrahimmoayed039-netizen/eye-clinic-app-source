@@ -5,6 +5,7 @@ let SALES_CATEGORIES_CACHE = [];
 let SALES_DRAFT_DISCOUNT = 0;
 let SALES_DRAFT_PAYMENT = 'نقدي';
 let SALES_DRAFT_NOTES = '';
+let SALES_ACTIVE_CATEGORY = '';
 
 async function renderSalesTab(container, restoreData) {
   [SALES_SETTINGS_CACHE, SALES_PRODUCTS_CACHE, SALES_CATEGORIES_CACHE] = await Promise.all([
@@ -35,13 +36,12 @@ async function renderSalesTab(container, restoreData) {
           <input id="s-barcode-scan" placeholder="📷 امسح الباركود هنا (يضاف تلقائيًا)..." style="border-color:#0f766e" onkeydown="handleBarcodeScan(event)">
         </div>
       </div>
+      <div class="form-group"><label>الأصناف</label>
+        <div id="s-category-tabs" class="category-tabs"></div>
+      </div>
       <div class="form-group"><label>المنتجات</label>
         <div class="toolbar" style="margin-bottom:8px">
           <input id="s-product-search" placeholder="ابحث بالاسم..." style="flex:1" oninput="loadProductGrid()">
-          <select id="s-product-category" onchange="loadProductGrid()">
-            <option value="">كل الفئات</option>
-            ${SALES_CATEGORIES_CACHE.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
-          </select>
         </div>
         <div id="product-grid" class="product-grid" style="max-height:340px"></div>
       </div>
@@ -89,15 +89,39 @@ async function renderSalesTab(container, restoreData) {
     SALES_DRAFT_PAYMENT = 'نقدي';
     SALES_DRAFT_NOTES = '';
   }
+  SALES_ACTIVE_CATEGORY = '';
+  renderCategoryTabs();
   loadProductGrid();
   renderCartTable();
   renderHeldInvoicesBox();
   document.getElementById('s-barcode-scan')?.focus();
 }
 
+function renderCategoryTabs() {
+  const box = document.getElementById('s-category-tabs');
+  if (!box) return;
+  const countAll = SALES_PRODUCTS_CACHE.length;
+  const tabs = [{ name: '', label: 'الكل', count: countAll }, ...SALES_CATEGORIES_CACHE.map(c => ({
+    name: c.name,
+    label: c.name,
+    count: SALES_PRODUCTS_CACHE.filter(p => p.category === c.name).length,
+  }))];
+  box.innerHTML = tabs.map(t => `
+    <button type="button" class="category-tab ${SALES_ACTIVE_CATEGORY === t.name ? 'active' : ''}" onclick="selectSalesCategory('${t.name.replace(/'/g, "")}')">
+      ${t.label} <span class="category-tab-count">${t.count}</span>
+    </button>
+  `).join('');
+}
+
+function selectSalesCategory(name) {
+  SALES_ACTIVE_CATEGORY = name;
+  renderCategoryTabs();
+  loadProductGrid();
+}
+
 function loadProductGrid() {
   const search = (document.getElementById('s-product-search')?.value || '').toLowerCase();
-  const cat = document.getElementById('s-product-category')?.value || '';
+  const cat = SALES_ACTIVE_CATEGORY;
   let filtered = SALES_PRODUCTS_CACHE;
   if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search));
   if (cat) filtered = filtered.filter(p => p.category === cat);
@@ -120,7 +144,7 @@ function handleBarcodeScan(event) {
   input.value = '';
   if (!code) return;
   const product = SALES_PRODUCTS_CACHE.find(p => p.barcode && p.barcode === code);
-  if (!product) { alert(`لا يوجد منتج بهذا الباركود: ${code}`); return; }
+  if (!product) { showAlertModal(`لا يوجد منتج بهذا الباركود: ${code}`); return; }
   addToCart(product.id, product.name, product.price);
   input.focus();
 }
@@ -157,7 +181,7 @@ function addToCart(productId, name, price) {
   const existing = CART.find(c => c.product_id === productId);
   const currentQty = existing ? existing.qty : 0;
   if (product && (currentQty + 1) > product.stock_qty) {
-    alert(`الكمية المطلوبة تتجاوز المتوفر بالمخزون (${product.stock_qty})`);
+    showAlertModal(`الكمية المطلوبة تتجاوز المتوفر بالمخزون (${product.stock_qty})`);
     return;
   }
   if (existing) existing.qty += 1;
@@ -180,7 +204,7 @@ function updateCartQty(idx, qty) {
   if (item.product_id) {
     const product = SALES_PRODUCTS_CACHE.find(p => p.id === item.product_id);
     if (product && newQty > product.stock_qty) {
-      alert(`الكمية المطلوبة (${newQty}) تتجاوز المتوفر بالمخزون (${product.stock_qty})`);
+      showAlertModal(`الكمية المطلوبة (${newQty}) تتجاوز المتوفر بالمخزون (${product.stock_qty})`);
       renderCartTable();
       return;
     }
@@ -229,7 +253,7 @@ function renderCartTable() {
 }
 
 async function submitInvoice() {
-  if (!CART.length) { alert('أضف عناصر للفاتورة أولاً'); return; }
+  if (!CART.length) { showAlertModal('أضف عناصر للفاتورة أولاً'); return; }
   const payload = {
     patient_id: window.SELECTED_PATIENT ? window.SELECTED_PATIENT.id : null,
     employee_id: CURRENT_USER.id,
@@ -248,7 +272,7 @@ async function submitInvoice() {
     window.SELECTED_PATIENT = null;
     renderSalesTab(document.getElementById('content'));
   } catch (err) {
-    alert('تعذر حفظ الفاتورة: ' + err.message);
+    showAlertModal('تعذر حفظ الفاتورة: ' + err.message);
   }
 }
 
@@ -259,13 +283,13 @@ async function collectPayment(invoiceId, total, paidAmount, refreshFn) {
   const input = await showPromptModal(`المتبقي على هذه الفاتورة: ${remaining.toLocaleString('ar')} د.ع<br>أدخل المبلغ المُسدَّد الآن:`, remaining);
   if (input === null) return;
   const amount = parseFloat(input);
-  if (!amount || amount <= 0) { alert('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
+  if (!amount || amount <= 0) { showAlertModal('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
   try {
     const res = await API.post(`/api/invoices/${invoiceId}/pay`, { amount, employee_id: CURRENT_USER.id });
-    alert(`✅ تم تسجيل التسديد بنجاح.\nالحالة الآن: ${res.status}${res.remaining > 0 ? `\nالمتبقي: ${res.remaining.toLocaleString('ar')} د.ع` : ''}`);
+    showAlertModal(`✅ تم تسجيل التسديد بنجاح.\nالحالة الآن: ${res.status}${res.remaining > 0 ? `\nالمتبقي: ${res.remaining.toLocaleString('ar')} د.ع` : ''}`);
     if (typeof refreshFn === 'function') refreshFn();
   } catch (err) {
-    alert('تعذر تسجيل التسديد: ' + err.message);
+    showAlertModal('تعذر تسجيل التسديد: ' + err.message);
   }
 }
 
@@ -303,7 +327,7 @@ function saveHeldInvoicesList(list) {
 }
 
 async function holdCurrentInvoice() {
-  if (!CART.length) { alert('لا يوجد شيء بالسلة لتعليقه'); return; }
+  if (!CART.length) { showAlertModal('لا يوجد شيء بالسلة لتعليقه'); return; }
   const suggested = window.SELECTED_PATIENT ? window.SELECTED_PATIENT.name : '';
   const label = await showPromptModal('اسم أو ملاحظة لتمييز الفاتورة المعلّقة:', suggested);
   if (label === null) return;
@@ -345,17 +369,17 @@ function renderHeldInvoicesBox() {
   `;
 }
 
-function resumeHeldInvoice(id) {
+async function resumeHeldInvoice(id) {
   const held = loadHeldInvoices();
   const item = held.find(h => h.id === id);
   if (!item) return;
-  if (CART.length && !confirm('يوجد عناصر بالفاتورة الحالية، سيتم استبدالها بالفاتورة المعلّقة. متابعة؟')) return;
+  if (CART.length && !(await showConfirmModal('يوجد عناصر بالفاتورة الحالية، سيتم استبدالها بالفاتورة المعلّقة. متابعة؟'))) return;
   saveHeldInvoicesList(held.filter(h => h.id !== id));
   renderSalesTab(document.getElementById('content'), item);
 }
 
-function deleteHeldInvoice(id) {
-  if (!confirm('حذف هذه الفاتورة المعلّقة نهائيًا؟')) return;
+async function deleteHeldInvoice(id) {
+  if (!(await showConfirmModal('حذف هذه الفاتورة المعلّقة نهائيًا؟'))) return;
   saveHeldInvoicesList(loadHeldInvoices().filter(h => h.id !== id));
   renderHeldInvoicesBox();
 }
@@ -406,11 +430,11 @@ async function printInvoiceThermal(invoice, width) {
     const res = await window.desktop.printThermalText({
       invoice, clinic: settings, interfaceType, address, codePage, width
     });
-    if (!res.ok) alert('تعذر الطباعة الحرارية:\n' + res.error);
+    if (!res.ok) showAlertModal('تعذر الطباعة الحرارية:\n' + res.error);
     return;
   }
 
   const receiptHtml = buildThermalReceiptHtml(invoice, settings, width);
   const res = await window.desktop.printThermalImage({ receiptHtml, width, interfaceType, address });
-  if (!res.ok) alert('تعذر الطباعة الحرارية:\n' + res.error);
+  if (!res.ok) showAlertModal('تعذر الطباعة الحرارية:\n' + res.error);
 }

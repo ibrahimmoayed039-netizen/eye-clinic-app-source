@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>مولّد مفاتيح التفعيل — للمطوّر فقط</title>
+<style>
+  * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; }
+  body { margin:0; background: linear-gradient(135deg,#0f766e,#134e4a); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .card { background:#fff; border-radius:16px; padding:36px; width:480px; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+  h1 { text-align:center; color:#0f766e; font-size:20px; margin-bottom:6px; }
+  p.sub { text-align:center; color:#666; margin-top:0; margin-bottom:24px; font-size:13px; line-height:1.8; }
+  label { display:block; font-size:13px; color:#333; margin:14px 0 6px; }
+  input { width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px; font-family:monospace; text-align:center; letter-spacing:1px; }
+  button.go { width:100%; margin-top:18px; padding:12px; background:#0f766e; color:#fff; border:none; border-radius:10px; font-size:15px; cursor:pointer; }
+  button.go:hover { background:#0d5f58; }
+  .result-box { margin-top:20px; background:#f0fdfa; border:1.5px dashed #0f766e; border-radius:10px; padding:16px; text-align:center; display:none; }
+  .result-box .key { font-family:monospace; font-size:20px; font-weight:bold; color:#0f766e; letter-spacing:2px; user-select:all; margin-bottom:8px; }
+  .result-box button { background:#fff; border:1px solid #0f766e; color:#0f766e; padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; }
+  .msg { margin-top:10px; font-size:13px; text-align:center; color:#b91c1c; min-height:16px; }
+  .secret-note { margin-top:24px; font-size:11px; color:#aaa; text-align:center; line-height:1.7; border-top:1px solid #eee; padding-top:14px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔑 مولّد مفاتيح التفعيل</h1>
+    <p class="sub">أداة المطوّر — أدخل رمز جهاز العميل (يظهر له من شاشة القفل أو الإعدادات) وستحصل على مفتاح التفعيل الخاص بذاك الجهاز فقط.</p>
+
+    <label>رمز جهاز العميل (Device ID)</label>
+    <input id="device-id" placeholder="مثال: A1B2C3D4E5F60708" oninput="clearResult()">
+
+    <button class="go" onclick="generate()">توليد مفتاح التفعيل</button>
+    <div class="msg" id="msg"></div>
+
+    <div class="result-box" id="result-box">
+      <div class="key" id="result-key">----</div>
+      <button onclick="copyKey()">📋 نسخ المفتاح</button>
+    </div>
+
+    <div class="secret-note">
+      ⚠️ هذه الصفحة تحتوي القيمة السرية لتوليد المفاتيح — احتفظ فيها لنفسك فقط ولا ترسلها أو تشاركها مع أي عميل.<br>
+      يجب أن تطابق نفس القيمة الموجودة في <code>src/main/main.js</code> داخل البرنامج.
+    </div>
+  </div>
+
+<script>
+  // ⚠️ يجب أن تطابق هذه القيمة تمامًا LICENSE_SECRET في src/main/main.js
+  const LICENSE_SECRET = 'NHk6rbUAbBXSafpzWyZgioOAglOH9B';
+
+  function normalizeDeviceId(id) {
+    return (id || '').toUpperCase().replace(/[^A-F0-9]/g, '');
+  }
+
+  async function hmacSha256Hex(secret, message) {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+    return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function generateKey(deviceId) {
+    const normalized = normalizeDeviceId(deviceId);
+    const hex = await hmacSha256Hex(LICENSE_SECRET, normalized);
+    const shortHex = hex.slice(0, 20).toUpperCase();
+    return shortHex.match(/.{1,4}/g).join('-');
+  }
+
+  function clearResult() {
+    document.getElementById('result-box').style.display = 'none';
+    document.getElementById('msg').textContent = '';
+  }
+
+  async function generate() {
+    const raw = document.getElementById('device-id').value.trim();
+    const msg = document.getElementById('msg');
+    if (!raw) { msg.textContent = 'الرجاء إدخال رمز جهاز العميل'; return; }
+    const normalized = normalizeDeviceId(raw);
+    if (normalized.length < 8) { msg.textContent = 'رمز الجهاز غير صالح — تأكد من نسخه كاملًا من البرنامج'; return; }
+    msg.textContent = '';
+    const key = await generateKey(raw);
+    document.getElementById('result-key').textContent = key;
+    document.getElementById('result-box').style.display = 'block';
+  }
+
+  function copyKey() {
+    const key = document.getElementById('result-key').textContent;
+    navigator.clipboard.writeText(key).then(() => {
+      const msg = document.getElementById('msg');
+      msg.style.color = '#0f766e';
+      msg.textContent = 'تم نسخ المفتاح ✅';
+      setTimeout(() => { msg.textContent = ''; msg.style.color = '#b91c1c'; }, 1500);
+    });
+  }
+</script>
+</body>
+</html>

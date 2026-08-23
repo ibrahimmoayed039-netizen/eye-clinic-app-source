@@ -158,6 +158,11 @@ async function renderSettingsTab(container) {
       <div id="backup-content">جاري التحميل...</div>
     </div>
 
+    <div class="card" id="license-card">
+      <h2>🔑 ترخيص البرنامج</h2>
+      <div id="license-content">جاري التحميل...</div>
+    </div>
+
     <div class="card">
       <h2>🌐 إعدادات الشبكة الحالية</h2>
       <p style="font-size:13px;margin-bottom:8px">وضع هذا الجهاز: <b>${local.mode === 'server' ? 'جهاز رئيسي (خادم)' : 'جهاز عميل'}</b></p>
@@ -167,6 +172,43 @@ async function renderSettingsTab(container) {
   `;
   renderPrinterDiscoveryBox();
   renderBackupCard();
+  renderLicenseCard();
+}
+
+async function renderLicenseCard() {
+  const box = document.getElementById('license-content');
+  if (!box) return;
+  const status = await window.desktop.getLicenseStatus();
+  if (status.activated) {
+    box.innerHTML = `
+      <p style="font-size:13px;color:#0f766e">✅ البرنامج مُفعّل بشكل دائم على هذا الجهاز.</p>
+      <p style="font-size:12px;color:#888">رمز الجهاز: <span style="font-family:monospace">${status.deviceId}</span></p>
+    `;
+    return;
+  }
+  box.innerHTML = `
+    <p style="font-size:13px;color:${status.daysLeft <= 1 ? '#b91c1c' : '#374151'}">
+      ⏳ متبقٍّ من الفترة التجريبية: <b>${status.daysLeft}</b> يوم${status.daysLeft === 1 ? '' : (status.daysLeft === 0 ? ' (انتهت)' : '')}.
+    </p>
+    <div class="grid-2">
+      <div class="form-group"><label>رمز هذا الجهاز (أرسله للحصول على مفتاح)</label>
+        <input value="${status.deviceId}" readonly style="font-family:monospace;text-align:center">
+      </div>
+      <div class="form-group"><label>مفتاح التفعيل</label>
+        <input id="st-license-key" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" style="font-family:monospace;text-align:center">
+      </div>
+    </div>
+    <button class="btn" onclick="activateLicenseFromSettings()">تفعيل البرنامج</button>
+  `;
+}
+
+async function activateLicenseFromSettings() {
+  const key = document.getElementById('st-license-key').value.trim();
+  if (!key) { showAlertModal('الرجاء إدخال مفتاح التفعيل'); return; }
+  const result = await window.desktop.activateLicense(key);
+  if (!result.ok) { showAlertModal(result.error || 'مفتاح غير صحيح'); return; }
+  showAlertModal('تم التفعيل بنجاح، سيُعاد تشغيل البرنامج الآن.');
+  setTimeout(() => window.desktop.relaunchApp(), 900);
 }
 
 function formatBackupSize(bytes) {
@@ -228,8 +270,8 @@ async function renderBackupCard() {
 async function createBackupNow() {
   const res = await window.desktop.createBackup();
   if (res.canceled) return;
-  if (res.ok) alert('✅ تم إنشاء النسخة الاحتياطية بنجاح في:\n' + res.filePath);
-  else alert('❌ ' + res.error);
+  if (res.ok) showAlertModal('✅ تم إنشاء النسخة الاحتياطية بنجاح في:\n' + res.filePath);
+  else showAlertModal('❌ ' + res.error);
 }
 
 async function openAutoBackupFolderNow() {
@@ -237,10 +279,10 @@ async function openAutoBackupFolderNow() {
 }
 
 async function restoreBackupNow() {
-  if (!confirm('تحذير: ستستبدل هذه العملية كل البيانات الحالية بمحتوى النسخة الاحتياطية المختارة، وسيعاد تشغيل البرنامج تلقائيًا. هل تريد المتابعة؟')) return;
+  if (!(await showConfirmModal('تحذير: ستستبدل هذه العملية كل البيانات الحالية بمحتوى النسخة الاحتياطية المختارة، وسيعاد تشغيل البرنامج تلقائيًا. هل تريد المتابعة؟'))) return;
   const res = await window.desktop.restoreBackup();
   if (res.canceled) return;
-  if (!res.ok) alert('❌ ' + res.error);
+  if (!res.ok) showAlertModal('❌ ' + res.error);
   // عند النجاح سيُغلق البرنامج ويعيد التشغيل تلقائيًا من نفسه، لا حاجة لأي إجراء إضافي هنا.
 }
 
@@ -251,9 +293,9 @@ async function saveClinicSettings() {
       clinic_phone: document.getElementById('st-clinic-phone').value,
       clinic_address: document.getElementById('st-clinic-address').value,
     });
-    alert('تم الحفظ بنجاح');
+    showAlertModal('تم الحفظ بنجاح');
   } catch (e) {
-    alert('❌ تعذّر الحفظ:\n' + e.message);
+    showAlertModal('❌ تعذّر الحفظ:\n' + e.message);
   }
 }
 
@@ -265,9 +307,9 @@ async function savePrinterSettings() {
       thermal_print_mode: document.getElementById('st-thermal-mode').value,
       thermal_code_page: document.getElementById('st-thermal-codepage').value,
     });
-    alert('تم حفظ إعدادات الطابعة');
+    showAlertModal('تم حفظ إعدادات الطابعة');
   } catch (e) {
-    alert('❌ تعذّر حفظ إعدادات الطابعة:\n' + e.message);
+    showAlertModal('❌ تعذّر حفظ إعدادات الطابعة:\n' + e.message);
   }
 }
 
@@ -283,7 +325,7 @@ async function testTextModePrint() {
   const interfaceType = document.getElementById('st-printer-interface').value;
   const address = document.getElementById('st-printer-address').value;
   const codePage = parseInt(document.getElementById('st-thermal-codepage').value) || 37;
-  if (!address || !address.trim()) { alert('الرجاء إدخال عنوان/اسم الطابعة أولًا'); return; }
+  if (!address || !address.trim()) { showAlertModal('الرجاء إدخال عنوان/اسم الطابعة أولًا'); return; }
   const settings = await API.get('/api/settings');
   const sampleInvoice = {
     invoice_number: 'TEST-' + Date.now(),
@@ -294,8 +336,8 @@ async function testTextModePrint() {
     currency: 'IQD', exchange_rate: settings.exchange_rate || 1310,
   };
   const res = await window.desktop.printThermalText({ invoice: sampleInvoice, clinic: settings, interfaceType, address, codePage, width: 80 });
-  if (res.ok) alert('✅ تم إرسال الإيصال التجريبي. تحقق من الطباعة الفعلية.');
-  else alert('❌ تعذّرت الطباعة النصية:\n' + res.error);
+  if (res.ok) showAlertModal('✅ تم إرسال الإيصال التجريبي. تحقق من الطباعة الفعلية.');
+  else showAlertModal('❌ تعذّرت الطباعة النصية:\n' + res.error);
 }
 
 function onPrinterInterfaceChange() { renderPrinterDiscoveryBox(); }
@@ -329,25 +371,25 @@ async function testThermalPrinterConnection() {
   const interfaceType = document.getElementById('st-printer-interface').value;
   const address = document.getElementById('st-printer-address').value;
   const res = await window.desktop.testPrinterConnection({ interfaceType, address });
-  if (res.ok) alert('✅ ' + res.message);
-  else alert('❌ ' + res.error);
+  if (res.ok) showAlertModal('✅ ' + res.message);
+  else showAlertModal('❌ ' + res.error);
 }
 
 async function testCharacterTables() {
   const interfaceType = document.getElementById('st-printer-interface').value;
   const address = document.getElementById('st-printer-address').value;
-  if (!address || !address.trim()) { alert('الرجاء إدخال عنوان/اسم الطابعة أولًا'); return; }
-  if (!confirm('سيتم طباعة ورقة طويلة نسبيًا (49 سطر اختبار). هل تريد المتابعة؟')) return;
+  if (!address || !address.trim()) { showAlertModal('الرجاء إدخال عنوان/اسم الطابعة أولًا'); return; }
+  if (!(await showConfirmModal('سيتم طباعة ورقة طويلة نسبيًا (49 سطر اختبار). هل تريد المتابعة؟'))) return;
   const res = await window.desktop.testCodePages({ interfaceType, address });
-  if (res.ok) alert('✅ تم إرسال اختبار جداول الحروف للطابعة. راجع الورقة المطبوعة وحدد الرقم الذي ظهرت تحته الجملة العربية بشكل صحيح.');
-  else alert('❌ تعذّر تنفيذ الاختبار:\n' + res.error);
+  if (res.ok) showAlertModal('✅ تم إرسال اختبار جداول الحروف للطابعة. راجع الورقة المطبوعة وحدد الرقم الذي ظهرت تحته الجملة العربية بشكل صحيح.');
+  else showAlertModal('❌ تعذّر تنفيذ الاختبار:\n' + res.error);
 }
 
 async function savePrintMethodSettings() {
   const regular = document.getElementById('st-print-regular').checked;
   const thermal80 = document.getElementById('st-print-thermal80').checked;
   const thermal58 = document.getElementById('st-print-thermal58').checked;
-  if (!regular && !thermal80 && !thermal58) { alert('يجب تفعيل طريقة طباعة واحدة على الأقل'); return; }
+  if (!regular && !thermal80 && !thermal58) { showAlertModal('يجب تفعيل طريقة طباعة واحدة على الأقل'); return; }
   let defaultMethod = document.getElementById('st-default-print-method').value;
   if ((defaultMethod === 'regular' && !regular) || (defaultMethod === 'thermal80' && !thermal80) || (defaultMethod === 'thermal58' && !thermal58)) defaultMethod = 'ask';
   await API.post('/api/settings', {
@@ -356,12 +398,12 @@ async function savePrintMethodSettings() {
     print_thermal58_enabled: thermal58 ? '1' : '0',
     default_print_method: defaultMethod,
   });
-  alert('تم حفظ طرق الطباعة المتاحة');
+  showAlertModal('تم حفظ طرق الطباعة المتاحة');
 }
 
 async function saveDefaultCurrencySettings() {
   await API.post('/api/settings', { invoice_currency: document.getElementById('st-default-currency').value });
-  alert('تم حفظ العملة الافتراضية للفواتير');
+  showAlertModal('تم حفظ العملة الافتراضية للفواتير');
 }
 
 function previewUiFontSize() {
@@ -372,7 +414,7 @@ async function saveUiFontSizeSettings() {
   const val = document.getElementById('st-ui-fontsize').value;
   await API.post('/api/settings', { ui_font_size: val });
   applyUiFontSizeClass(val);
-  alert('تم حفظ حجم خط الواجهة');
+  showAlertModal('تم حفظ حجم خط الواجهة');
 }
 
 let PENDING_LOGO_DATAURL = null;
@@ -408,7 +450,7 @@ async function saveInvoiceStyleSettings() {
   };
   if (PENDING_LOGO_DATAURL !== null) payload.invoice_logo = PENDING_LOGO_DATAURL;
   await API.post('/api/settings', payload);
-  alert('تم حفظ تخصيص الفاتورة بنجاح');
+  showAlertModal('تم حفظ تخصيص الفاتورة بنجاح');
 }
 
 async function previewInvoiceStyle() {
@@ -428,7 +470,7 @@ async function previewInvoiceStyle() {
 }
 
 async function resetNetworkMode() {
-  if (!confirm('سيتم إعادة تشغيل إعداد وضع الجهاز. هل أنت متأكد؟')) return;
+  if (!(await showConfirmModal('سيتم إعادة تشغيل إعداد وضع الجهاز. هل أنت متأكد؟'))) return;
   await window.desktop.resetSetup();
   location.reload();
 }

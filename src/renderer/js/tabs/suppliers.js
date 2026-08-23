@@ -44,7 +44,7 @@ async function loadSuppliers() {
 }
 
 async function deleteSupplier(id) {
-  if (!confirm('حذف هذا المورد وكل سجل معاملاته؟')) return;
+  if (!(await showConfirmModal('حذف هذا المورد وكل سجل معاملاته؟'))) return;
   await API.del(`/api/suppliers/${id}`);
   loadSuppliers();
 }
@@ -79,14 +79,14 @@ async function saveSupplier(id) {
     address: document.getElementById('sup-address').value.trim(),
     notes: document.getElementById('sup-notes').value.trim(),
   };
-  if (!data.name) { alert('الرجاء إدخال اسم المورد'); return; }
+  if (!data.name) { showAlertModal('الرجاء إدخال اسم المورد'); return; }
   try {
     if (id) await API.put(`/api/suppliers/${id}`, data);
     else await API.post('/api/suppliers', data);
     document.querySelector('.modal-overlay').remove();
     loadSuppliers();
   } catch (err) {
-    alert('تعذر حفظ بيانات المورد: ' + err.message);
+    showAlertModal('تعذر حفظ بيانات المورد: ' + err.message);
   }
 }
 
@@ -145,7 +145,7 @@ async function addSupplierTransaction(supplierId, type) {
   const amountStr = await showPromptModal(`${label}:`, '0');
   if (amountStr === null) return;
   const amount = parseFloat(amountStr);
-  if (!amount || amount <= 0) { alert('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
+  if (!amount || amount <= 0) { showAlertModal('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
   const description = await showPromptModal('وصف مختصر (اختياري):', '');
   try {
     await API.post(`/api/suppliers/${supplierId}/transactions`, {
@@ -155,6 +155,6 @@ async function addSupplierTransaction(supplierId, type) {
     await loadSuppliers();
     openSupplierLedger(supplierId);
   } catch (err) {
-    alert('تعذر تسجيل العملية: ' + err.message);
+    showAlertModal('تعذر تسجيل العملية: ' + err.message);
   }
 }

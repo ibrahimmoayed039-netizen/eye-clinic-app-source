@@ -102,7 +102,7 @@ async function loadExams() {
 }
 
 async function deleteExam(id) {
-  if (!confirm('حذف هذا الفحص؟')) return;
+  if (!(await showConfirmModal('حذف هذا الفحص؟'))) return;
   await API.del(`/api/exams/${id}`);
   loadExams();
 }
@@ -267,7 +267,7 @@ async function saveExam() {
     document.querySelector('.modal-overlay').remove();
     loadExams();
   } catch (err) {
-    alert('تعذر حفظ الفحص: ' + err.message);
+    showAlertModal('تعذر حفظ الفحص: ' + err.message);
   }
 }
 

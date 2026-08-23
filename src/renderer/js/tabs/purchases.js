@@ -102,23 +102,23 @@ async function collectPurchasePayment(id, total, paidAmount) {
   const input = await showPromptModal(`المتبقي على فاتورة الشراء هذه: ${remaining.toLocaleString('ar')} د.ع<br>أدخل المبلغ المُسدَّد الآن:`, remaining);
   if (input === null) return;
   const amount = parseFloat(input);
-  if (!amount || amount <= 0) { alert('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
+  if (!amount || amount <= 0) { showAlertModal('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
   try {
     const res = await API.post(`/api/purchases/${id}/pay`, { amount, employee_id: CURRENT_USER.id });
-    alert(`✅ تم تسجيل التسديد بنجاح.\nالحالة الآن: ${res.status}${res.remaining > 0 ? `\nالمتبقي: ${res.remaining.toLocaleString('ar')} د.ع` : ''}`);
+    showAlertModal(`✅ تم تسجيل التسديد بنجاح.\nالحالة الآن: ${res.status}${res.remaining > 0 ? `\nالمتبقي: ${res.remaining.toLocaleString('ar')} د.ع` : ''}`);
     loadPurchases();
   } catch (err) {
-    alert('تعذر تسجيل التسديد: ' + err.message);
+    showAlertModal('تعذر تسجيل التسديد: ' + err.message);
   }
 }
 
 async function deletePurchase(id) {
-  if (!confirm('حذف فاتورة الشراء هذه؟ سيتم خصم الكميات المضافة للمخزون منها وحذف حركة الدين المرتبطة بها من كشف حساب المورد.')) return;
+  if (!(await showConfirmModal('حذف فاتورة الشراء هذه؟ سيتم خصم الكميات المضافة للمخزون منها وحذف حركة الدين المرتبطة بها من كشف حساب المورد.'))) return;
   try {
     await API.del(`/api/purchases/${id}`);
     loadPurchases();
   } catch (err) {
-    alert('تعذر حذف فاتورة الشراء: ' + err.message);
+    showAlertModal('تعذر حذف فاتورة الشراء: ' + err.message);
   }
 }
 
@@ -197,7 +197,7 @@ function handlePurchaseBarcodeScan(event) {
   input.value = '';
   if (!code) return;
   const product = PURCHASES_PRODUCTS_CACHE.find(p => p.barcode && p.barcode === code);
-  if (!product) { alert(`لا يوجد منتج بهذا الباركود: ${code}`); return; }
+  if (!product) { showAlertModal(`لا يوجد منتج بهذا الباركود: ${code}`); return; }
   addToPurchaseCart(product.id, product.name, product.cost);
   input.focus();
 }
@@ -262,8 +262,8 @@ function renderPurchaseCartTable() {
 
 async function submitPurchase() {
   const supplierId = document.getElementById('pu-supplier').value;
-  if (!supplierId) { alert('الرجاء اختيار المورد أولاً'); return; }
-  if (!PURCHASE_CART.length) { alert('أضف أصنافًا لفاتورة الشراء أولاً'); return; }
+  if (!supplierId) { showAlertModal('الرجاء اختيار المورد أولاً'); return; }
+  if (!PURCHASE_CART.length) { showAlertModal('أضف أصنافًا لفاتورة الشراء أولاً'); return; }
   const payload = {
     supplier_id: parseInt(supplierId),
     employee_id: CURRENT_USER.id,
@@ -274,10 +274,10 @@ async function submitPurchase() {
   };
   try {
     const result = await API.post('/api/purchases', payload);
-    alert(`✅ تم حفظ فاتورة الشراء رقم ${result.purchase_number.replace('PUR-', '')} وتحديث المخزون بنجاح`);
+    showAlertModal(`✅ تم حفظ فاتورة الشراء رقم ${result.purchase_number.replace('PUR-', '')} وتحديث المخزون بنجاح`);
     await printPurchaseInvoice(result.id);
     renderPurchasesTab(document.getElementById('content'));
   } catch (err) {
-    alert('تعذر حفظ فاتورة الشراء: ' + err.message);
+    showAlertModal('تعذر حفظ فاتورة الشراء: ' + err.message);
   }
 }
