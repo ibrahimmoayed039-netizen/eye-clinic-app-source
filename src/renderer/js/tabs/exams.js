@@ -155,16 +155,17 @@ async function searchPatientForExam() {
   const rows = await API.get(`/api/patients?search=${encodeURIComponent(q)}`);
   let list = document.getElementById('e-patient-results');
   if (!list) {
+    const anchor = document.getElementById('e-patient-search');
+    anchor.parentElement.style.position = 'relative';
     list = document.createElement('div');
     list.id = 'e-patient-results';
-    list.style = 'position:absolute;background:#fff;border:1px solid #ddd;border-radius:8px;z-index:50;max-height:200px;overflow:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)';
-    document.getElementById('e-patient-search').after(list);
+    list.style = 'position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#fff;border:1px solid #ddd;border-radius:8px;z-index:50;max-height:200px;overflow:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)';
+    anchor.after(list);
   }
   list.innerHTML = rows.slice(0, 8).map(p => `<div style="padding:8px 12px;cursor:pointer" onmousedown="filterExamsByPatient(${p.id}, '${p.full_name.replace(/'/g, "")}'); document.getElementById('e-patient-results').remove(); document.getElementById('e-patient-search').value='${p.full_name.replace(/'/g,"")}'">${p.full_name} - ${p.phone || ''}</div>`).join('') || '<div style="padding:8px 12px;color:#999">لا نتائج</div>';
 }
 
 async function openExamModal() {
-  const patients = await API.get('/api/patients');
   const employees = await API.get('/api/employees');
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -172,8 +173,12 @@ async function openExamModal() {
     <div class="modal" style="width:760px">
       <h3>فحص نظر جديد</h3>
       <div class="grid-2">
-        <div class="form-group"><label>المريض</label>
-          <select id="x-patient">${patients.map(p => `<option value="${p.id}">${p.full_name}</option>`).join('')}</select>
+        <div class="form-group"><label>المريض *</label>
+          <div style="display:flex;gap:6px">
+            <input id="x-patient-search" placeholder="ابحث باسم المريض..." style="flex:1" autocomplete="off" oninput="searchPatientForExamModal()">
+            <button type="button" class="btn small secondary" onclick="addPatientFromExamModal()">+ مريض جديد</button>
+          </div>
+          <input type="hidden" id="x-patient">
         </div>
         <div class="form-group"><label>الموظف الفاحص</label>
           <select id="x-employee">${employees.map(e => `<option value="${e.id}" ${CURRENT_USER && e.id===CURRENT_USER.id ? 'selected':''}>${e.full_name}</option>`).join('')}</select>
@@ -239,9 +244,44 @@ async function openExamModal() {
   document.body.appendChild(overlay);
 }
 
+async function searchPatientForExamModal() {
+  const q = document.getElementById('x-patient-search').value.trim();
+  document.getElementById('x-patient').value = ''; // إلغاء التحديد السابق لحين اختيار نتيجة جديدة
+  if (q.length < 2) { document.getElementById('x-patient-results')?.remove(); return; }
+  const rows = await API.get(`/api/patients?search=${encodeURIComponent(q)}`);
+  let list = document.getElementById('x-patient-results');
+  if (!list) {
+    const anchor = document.getElementById('x-patient-search');
+    anchor.parentElement.style.position = 'relative';
+    list = document.createElement('div');
+    list.id = 'x-patient-results';
+    list.style = 'position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#fff;border:1px solid #ddd;border-radius:8px;z-index:50;max-height:200px;overflow:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)';
+    anchor.after(list);
+  }
+  list.innerHTML = rows.slice(0, 8).map(p => `
+    <div style="padding:8px 12px;cursor:pointer" onmousedown="selectPatientForExamModal(${p.id}, '${p.full_name.replace(/'/g, "")}')">${p.full_name} - ${p.phone || ''}</div>
+  `).join('') || `<div style="padding:8px 12px;color:#999">لا نتائج — اضغط "+ مريض جديد" لإضافته</div>`;
+}
+
+function selectPatientForExamModal(id, name) {
+  document.getElementById('x-patient').value = id;
+  document.getElementById('x-patient-search').value = name;
+  document.getElementById('x-patient-results')?.remove();
+}
+
+function addPatientFromExamModal() {
+  openPatientModal(null, (newId, name) => {
+    document.getElementById('x-patient').value = newId;
+    document.getElementById('x-patient-search').value = name;
+    document.getElementById('x-patient-results')?.remove();
+  });
+}
+
 async function saveExam() {
+  const patientId = document.getElementById('x-patient').value;
+  if (!patientId) { showAlertModal('الرجاء اختيار المريض من نتائج البحث، أو إضافته كمريض جديد أولًا'); return; }
   const data = {
-    patient_id: document.getElementById('x-patient').value,
+    patient_id: patientId,
     employee_id: document.getElementById('x-employee').value,
     od_va_before: document.getElementById('x-od-va-before').value,
     os_va_before: document.getElementById('x-os-va-before').value,
@@ -264,7 +304,7 @@ async function saveExam() {
   };
   try {
     await API.post('/api/exams', data);
-    document.querySelector('.modal-overlay').remove();
+    closeTopModal();
     loadExams();
   } catch (err) {
     showAlertModal('تعذر حفظ الفحص: ' + err.message);

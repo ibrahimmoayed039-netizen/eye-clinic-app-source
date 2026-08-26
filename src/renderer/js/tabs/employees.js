@@ -100,7 +100,7 @@ async function saveEmployee(id) {
       if (!username) { showAlertModal('الرجاء إدخال اسم المستخدم'); return; }
       await API.post('/api/employees', { full_name, username, password, role, phone });
     }
-    document.querySelector('.modal-overlay').remove();
+    closeTopModal();
     loadEmployees();
   } catch (err) {
     showAlertModal('تعذر حفظ بيانات الموظف: ' + err.message);

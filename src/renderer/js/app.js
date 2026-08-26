@@ -54,6 +54,13 @@ function applyUiFontSizeClass(size) {
   document.body.classList.add('ui-font-' + (size || 'medium'));
 }
 
+// إغلاق أعلى نافذة منبثقة مفتوحة حاليًا (الأحدث فتحًا) — مهم عند وجود نافذة فوق نافذة
+// (مثال: نافذة "إضافة مريض جديد" فوق نافذة "فحص جديد")، لتفادي إغلاق النافذة الخلفية بالخطأ.
+function closeTopModal() {
+  const overlays = document.querySelectorAll('.modal-overlay');
+  if (overlays.length) overlays[overlays.length - 1].remove();
+}
+
 // نوافذ رسائل مخصّصة (alert/confirm/prompt) بديلة عن نوافذ المتصفح الأصلية.
 // السبب: نوافذ window.alert()/confirm()/prompt() الأصلية في Electron على ويندوز
 // تسبب أحيانًا تعليق تركيز لوحة المفاتيح على النافذة الرئيسية بعد إغلاقها

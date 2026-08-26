@@ -56,7 +56,8 @@ function initDatabase(userDataPath) {
 
     CREATE TABLE IF NOT EXISTS categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE NOT NULL
+      name TEXT UNIQUE NOT NULL,
+      parent_id INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS products (
@@ -255,6 +256,12 @@ function initDatabase(userDataPath) {
   const supTransColumns = db.prepare("PRAGMA table_info(supplier_transactions)").all().map(c => c.name);
   if (!supTransColumns.includes('purchase_id')) {
     db.exec('ALTER TABLE supplier_transactions ADD COLUMN purchase_id INTEGER');
+  }
+
+  // ترحيل تلقائي: إضافة عمود الفئة الأب (لدعم الفروع) لقواعد البيانات القديمة
+  const catColumns = db.prepare("PRAGMA table_info(categories)").all().map(c => c.name);
+  if (!catColumns.includes('parent_id')) {
+    db.exec('ALTER TABLE categories ADD COLUMN parent_id INTEGER');
   }
 
   const adminExists = db.prepare('SELECT COUNT(*) c FROM employees').get();

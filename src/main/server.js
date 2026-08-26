@@ -141,12 +141,13 @@ function startServer(port, onReady) {
     res.json(getDb().prepare('SELECT * FROM categories ORDER BY name').all());
   });
   app.post('/api/categories', (req, res) => {
-    const { name } = req.body;
+    const { name, parent_id } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'اسم الفئة مطلوب' });
+    const parentId = parent_id ? Number(parent_id) : null;
     try {
-      const info = getDb().prepare('INSERT INTO categories (name) VALUES (?)').run(name.trim());
+      const info = getDb().prepare('INSERT INTO categories (name, parent_id) VALUES (?, ?)').run(name.trim(), parentId);
       broadcast('categories');
-      res.json({ id: info.lastInsertRowid, name: name.trim() });
+      res.json({ id: info.lastInsertRowid, name: name.trim(), parent_id: parentId });
     } catch (err) {
       const existing = getDb().prepare('SELECT * FROM categories WHERE name=?').get(name.trim());
       if (existing) return res.json(existing);
@@ -154,7 +155,10 @@ function startServer(port, onReady) {
     }
   });
   app.delete('/api/categories/:id', (req, res) => {
-    getDb().prepare('DELETE FROM categories WHERE id=?').run(req.params.id);
+    const db = getDb();
+    // حذف الفروع التابعة لهذه الفئة أولًا (مستوى واحد فقط من الفروع)
+    db.prepare('DELETE FROM categories WHERE parent_id=?').run(req.params.id);
+    db.prepare('DELETE FROM categories WHERE id=?').run(req.params.id);
     broadcast('categories'); res.json({ ok: true });
   });
 

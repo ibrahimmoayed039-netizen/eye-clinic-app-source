@@ -167,10 +167,12 @@ async function searchPatientForSpecialOrder() {
   const rows = await API.get(`/api/patients?search=${encodeURIComponent(q)}`);
   let list = document.getElementById('so-results');
   if (!list) {
+    const anchor = document.getElementById('so-customer-search');
+    anchor.parentElement.style.position = 'relative';
     list = document.createElement('div');
     list.id = 'so-results';
-    list.style = 'position:absolute;background:#fff;border:1px solid #ddd;border-radius:8px;z-index:50;max-height:160px;overflow:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)';
-    document.getElementById('so-customer-search').after(list);
+    list.style = 'position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#fff;border:1px solid #ddd;border-radius:8px;z-index:50;max-height:160px;overflow:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)';
+    anchor.after(list);
   }
   list.innerHTML = rows.slice(0, 8).map(p => `<div style="padding:8px 12px;cursor:pointer" onmousedown='selectSpecialOrderPatient(${p.id}, "${p.full_name.replace(/"/g, '')}", "${(p.phone || '').replace(/"/g, '')}")'>${p.full_name} - ${p.phone || ''}</div>`).join('') || '<div style="padding:8px;color:#999">لا نتائج — سيُسجَّل كزبون جديد بهذا الاسم</div>';
 }
@@ -201,7 +203,7 @@ async function submitNewSpecialOrder() {
   };
   try {
     const result = await API.post('/api/special-orders', payload);
-    document.querySelector('.modal-overlay')?.remove();
+    closeTopModal();
     await printSpecialOrderReceipt(result.id);
     loadSpecialOrders();
   } catch (err) {
@@ -268,7 +270,7 @@ async function submitDeliverSpecialOrder(id) {
   if (isNaN(payload.unit_price) || payload.unit_price < 0) { showAlertModal('الرجاء إدخال سعر بيع صحيح'); return; }
   try {
     const result = await API.post(`/api/special-orders/${id}/deliver`, payload);
-    document.querySelector('.modal-overlay')?.remove();
+    closeTopModal();
     showAlertModal(`✅ تم تسليم الطلب وإصدار فاتورة رقم ${result.invoice_number.replace('INV-', '')} بنجاح`);
     await promptPrintChoice(result.invoice_id);
     loadSpecialOrders();

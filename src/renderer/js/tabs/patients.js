@@ -161,7 +161,7 @@ async function savePatient(id) {
       const result = await API.post('/api/patients', data);
       newId = result.id;
     }
-    document.querySelector('.modal-overlay').remove();
+    closeTopModal();
     if (document.getElementById('patients-table')) loadPatients();
     if (!id && PATIENT_MODAL_CALLBACK) {
       PATIENT_MODAL_CALLBACK(newId, data.full_name);

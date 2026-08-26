@@ -42,8 +42,44 @@ function computeExpectedKey(deviceId) {
   return normalizeKey(crypto.createHmac('sha256', LICENSE_SECRET).update(deviceId).digest('hex').slice(0, 20));
 }
 
-function isValidLicenseKey(deviceId, enteredKey) {
+function isValidPermanentKey(deviceId, enteredKey) {
   return normalizeKey(enteredKey) === computeExpectedKey(deviceId);
+}
+
+// ---- مفاتيح تفعيل مؤقتة (صلاحية محدودة، مثلًا 7 أيام) ----
+// الصيغة: TRIAL-YYYYMMDD-XXXXXXXXXXXX
+// YYYYMMDD = تاريخ انتهاء صلاحية هذا المفتاح بالتحديد (يُحسب وقت التوليد، ثابت لا يتغيّر حسب وقت الإدخال)
+// XXXXXXXXXXXX = توقيع HMAC للتأكد من عدم التلاعب بالتاريخ أو استخدامه لجهاز آخر
+function parseTemporaryKey(enteredKey) {
+  const clean = (enteredKey || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!clean.startsWith('TRIAL')) return null;
+  const body = clean.slice(5);
+  const expiry = body.slice(0, 8);
+  const sig = body.slice(8, 20);
+  if (!/^\d{8}$/.test(expiry) || sig.length !== 12) return null;
+  return { expiry, sig };
+}
+
+function computeTemporaryKeySig(deviceId, expiryYYYYMMDD) {
+  return crypto.createHmac('sha256', LICENSE_SECRET).update(deviceId + '|' + expiryYYYYMMDD).digest('hex').slice(0, 12).toUpperCase();
+}
+
+function validateTemporaryKey(deviceId, enteredKey) {
+  const parsed = parseTemporaryKey(enteredKey);
+  if (!parsed) return null;
+  const expectedSig = computeTemporaryKeySig(deviceId, parsed.expiry);
+  if (expectedSig !== parsed.sig) return null;
+  const y = Number(parsed.expiry.slice(0, 4));
+  const m = Number(parsed.expiry.slice(4, 6));
+  const d = Number(parsed.expiry.slice(6, 8));
+  const expiryDate = new Date(y, m - 1, d, 23, 59, 59, 999);
+  return { expiryDate };
+}
+
+function isValidLicenseKey(deviceId, enteredKey) {
+  if (isValidPermanentKey(deviceId, enteredKey)) return true;
+  const temp = validateTemporaryKey(deviceId, enteredKey);
+  return !!(temp && Date.now() <= temp.expiryDate.getTime());
 }
 
 // علامة مخفية إضافية بمعزل عن ملف إعدادات electron-store، حتى لا يكفي حذف/تعديل
@@ -72,8 +108,23 @@ function writeMarkerFirstRun(deviceId, firstRun) {
 function getLicenseStatus(store) {
   const deviceId = getDeviceId();
   const savedKey = store.get('license.key');
-  if (savedKey && isValidLicenseKey(deviceId, savedKey)) {
-    return { activated: true, deviceId };
+  if (savedKey) {
+    if (isValidPermanentKey(deviceId, savedKey)) {
+      return { activated: true, deviceId, licenseType: 'permanent' };
+    }
+    const temp = validateTemporaryKey(deviceId, savedKey);
+    if (temp && Date.now() <= temp.expiryDate.getTime()) {
+      const daysLeft = Math.max(0, Math.ceil((temp.expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+      return {
+        activated: true,
+        deviceId,
+        licenseType: 'temporary',
+        expiresOn: temp.expiryDate.toISOString().slice(0, 10),
+        daysLeft,
+      };
+    }
+    // مفتاح مؤقت منتهي الصلاحية، أو مفتاح غير صالح على الإطلاق -> نتجاهله ونعامل الجهاز
+    // حسب الفترة التجريبية الأصلية أدناه (يحتاج مفتاح جديد للاستمرار)
   }
 
   const now = Date.now();

@@ -6,6 +6,8 @@ let SALES_DRAFT_DISCOUNT = 0;
 let SALES_DRAFT_PAYMENT = 'نقدي';
 let SALES_DRAFT_NOTES = '';
 let SALES_ACTIVE_CATEGORY = '';
+let SALES_ACTIVE_BRANCH = '';
+let SALES_UNDERPAY_ACK = false; // تأكيد الموظف بعد تحذير الدفع الناقص، لمرة واحدة فقط لكل محاولة
 
 async function renderSalesTab(container, restoreData) {
   [SALES_SETTINGS_CACHE, SALES_PRODUCTS_CACHE, SALES_CATEGORIES_CACHE] = await Promise.all([
@@ -38,6 +40,7 @@ async function renderSalesTab(container, restoreData) {
       </div>
       <div class="form-group"><label>الأصناف</label>
         <div id="s-category-tabs" class="category-tabs"></div>
+        <div id="s-branch-tabs" class="category-tabs branch-tabs" style="display:none"></div>
       </div>
       <div class="form-group"><label>المنتجات</label>
         <div class="toolbar" style="margin-bottom:8px">
@@ -60,7 +63,7 @@ async function renderSalesTab(container, restoreData) {
         </div>
       </div>
       <div class="grid-2">
-        <div class="form-group"><label>المبلغ المدفوع</label><input id="s-paid" type="number" value="0"></div>
+        <div class="form-group"><label>المبلغ المدفوع</label><input id="s-paid" type="number" value="0" oninput="SALES_UNDERPAY_ACK=false"></div>
         <div class="form-group"><label>ملاحظات</label><input id="s-notes" value="${draft ? (draft.notes || '') : ''}" oninput="SALES_DRAFT_NOTES=this.value"></div>
       </div>
       <div id="cart-total" style="font-size:16px;font-weight:700;margin:10px 0"></div>
@@ -90,6 +93,7 @@ async function renderSalesTab(container, restoreData) {
     SALES_DRAFT_NOTES = '';
   }
   SALES_ACTIVE_CATEGORY = '';
+  SALES_ACTIVE_BRANCH = '';
   renderCategoryTabs();
   loadProductGrid();
   renderCartTable();
@@ -97,34 +101,67 @@ async function renderSalesTab(container, restoreData) {
   document.getElementById('s-barcode-scan')?.focus();
 }
 
+// تُرجع أسماء الفئة الرئيسية + جميع فروعها (لتصفية منتجات الفئة بالكامل عند عدم تحديد فرع)
+function categoryAndBranchNames(mainName) {
+  const main = SALES_CATEGORIES_CACHE.find(c => c.name === mainName && !c.parent_id);
+  if (!main) return [mainName];
+  const branches = SALES_CATEGORIES_CACHE.filter(c => c.parent_id === main.id).map(c => c.name);
+  return [mainName, ...branches];
+}
+
 function renderCategoryTabs() {
   const box = document.getElementById('s-category-tabs');
   if (!box) return;
+  const mains = SALES_CATEGORIES_CACHE.filter(c => !c.parent_id);
   const countAll = SALES_PRODUCTS_CACHE.length;
-  const tabs = [{ name: '', label: 'الكل', count: countAll }, ...SALES_CATEGORIES_CACHE.map(c => ({
+  const tabs = [{ name: '', label: 'الكل', count: countAll }, ...mains.map(c => ({
     name: c.name,
     label: c.name,
-    count: SALES_PRODUCTS_CACHE.filter(p => p.category === c.name).length,
+    count: SALES_PRODUCTS_CACHE.filter(p => categoryAndBranchNames(c.name).includes(p.category)).length,
   }))];
   box.innerHTML = tabs.map(t => `
     <button type="button" class="category-tab ${SALES_ACTIVE_CATEGORY === t.name ? 'active' : ''}" onclick="selectSalesCategory('${t.name.replace(/'/g, "")}')">
       ${t.label} <span class="category-tab-count">${t.count}</span>
     </button>
   `).join('');
+
+  const branchBox = document.getElementById('s-branch-tabs');
+  if (!branchBox) return;
+  const activeMain = mains.find(c => c.name === SALES_ACTIVE_CATEGORY);
+  const branches = activeMain ? SALES_CATEGORIES_CACHE.filter(c => c.parent_id === activeMain.id) : [];
+  if (!branches.length) { branchBox.innerHTML = ''; branchBox.style.display = 'none'; return; }
+  branchBox.style.display = 'flex';
+  const branchTabs = [{ name: '', label: 'كل ' + activeMain.name }, ...branches.map(b => ({ name: b.name, label: b.name }))];
+  branchBox.innerHTML = branchTabs.map(t => `
+    <button type="button" class="category-tab branch-tab ${SALES_ACTIVE_BRANCH === t.name ? 'active' : ''}" onclick="selectSalesBranch('${t.name.replace(/'/g, "")}')">
+      ${t.label}
+    </button>
+  `).join('');
 }
 
 function selectSalesCategory(name) {
   SALES_ACTIVE_CATEGORY = name;
+  SALES_ACTIVE_BRANCH = '';
+  renderCategoryTabs();
+  loadProductGrid();
+}
+
+function selectSalesBranch(name) {
+  SALES_ACTIVE_BRANCH = name;
   renderCategoryTabs();
   loadProductGrid();
 }
 
 function loadProductGrid() {
   const search = (document.getElementById('s-product-search')?.value || '').toLowerCase();
-  const cat = SALES_ACTIVE_CATEGORY;
   let filtered = SALES_PRODUCTS_CACHE;
   if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search));
-  if (cat) filtered = filtered.filter(p => p.category === cat);
+  if (SALES_ACTIVE_BRANCH) {
+    filtered = filtered.filter(p => p.category === SALES_ACTIVE_BRANCH);
+  } else if (SALES_ACTIVE_CATEGORY) {
+    const names = categoryAndBranchNames(SALES_ACTIVE_CATEGORY);
+    filtered = filtered.filter(p => names.includes(p.category));
+  }
   const box = document.getElementById('product-grid');
   if (!filtered.length) { box.innerHTML = '<div class="empty" style="grid-column:1/-1">لا توجد منتجات مطابقة</div>'; return; }
   box.innerHTML = filtered.map(p => `
@@ -155,10 +192,12 @@ async function searchPatientForSale() {
   const rows = await API.get(`/api/patients?search=${encodeURIComponent(q)}`);
   let list = document.getElementById('s-patient-results');
   if (!list) {
+    const anchor = document.getElementById('s-patient-search');
+    anchor.parentElement.style.position = 'relative';
     list = document.createElement('div');
     list.id = 's-patient-results';
-    list.style = 'position:absolute;background:#fff;border:1px solid #ddd;border-radius:8px;z-index:50;max-height:180px;overflow:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)';
-    document.getElementById('s-patient-search').after(list);
+    list.style = 'position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#fff;border:1px solid #ddd;border-radius:8px;z-index:50;max-height:180px;overflow:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)';
+    anchor.after(list);
   }
   list.innerHTML = rows.slice(0, 8).map(p => `<div style="padding:8px 12px;cursor:pointer" onmousedown='selectSalePatient(${p.id}, "${p.full_name.replace(/"/g,"")}")'>${p.full_name} - ${p.phone || ''}</div>`).join('') || '<div style="padding:8px;color:#999">لا نتائج</div>';
 }
@@ -218,6 +257,7 @@ function removeCartItem(idx) {
 }
 
 function renderCartTable() {
+  SALES_UNDERPAY_ACK = false; // أي تغيير بالسلة أو الخصم يلغي أي تأكيد سابق على الدفع الناقص
   const box = document.getElementById('cart-table');
   if (!CART.length) {
     box.innerHTML = '<div class="empty" style="padding:16px">أضف منتجات للفاتورة <br><button class="btn small secondary" style="margin-top:8px" onclick="addCustomItem()">+ إضافة عنصر مخصص</button></div>';
@@ -254,12 +294,23 @@ function renderCartTable() {
 
 async function submitInvoice() {
   if (!CART.length) { showAlertModal('أضف عناصر للفاتورة أولاً'); return; }
+  const subtotal = CART.reduce((s, c) => s + c.qty * c.unit_price, 0);
+  const discount = parseFloat(document.getElementById('s-discount').value) || 0;
+  const total = Math.max(0, subtotal - discount);
+  const paid = parseFloat(document.getElementById('s-paid').value) || 0;
+
+  if (paid < total && !SALES_UNDERPAY_ACK) {
+    SALES_UNDERPAY_ACK = true;
+    showAlertModal('⚠️ لا يمكن ذلك — المبلغ المدفوع أقل من إجمالي الفاتورة.\nإذا كان هذا مقصودًا (بيع بالدين)، اضغط "إتمام البيع" مرة أخرى للتأكيد.');
+    return;
+  }
+
   const payload = {
     patient_id: window.SELECTED_PATIENT ? window.SELECTED_PATIENT.id : null,
     employee_id: CURRENT_USER.id,
     items: CART,
-    discount: parseFloat(document.getElementById('s-discount').value) || 0,
-    paid_amount: parseFloat(document.getElementById('s-paid').value) || 0,
+    discount,
+    paid_amount: paid,
     payment_method: document.getElementById('s-payment').value,
     currency: SALES_SETTINGS_CACHE.invoice_currency || 'IQD',
     exchange_rate: parseFloat(SALES_SETTINGS_CACHE.exchange_rate) || 1310,
@@ -267,6 +318,7 @@ async function submitInvoice() {
   };
   try {
     const result = await API.post('/api/invoices', payload);
+    SALES_UNDERPAY_ACK = false;
     await promptPrintChoice(result.id);
     CART = [];
     window.SELECTED_PATIENT = null;

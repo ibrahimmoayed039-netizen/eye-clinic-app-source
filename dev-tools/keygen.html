@@ -11,10 +11,19 @@
   p.sub { text-align:center; color:#666; margin-top:0; margin-bottom:24px; font-size:13px; line-height:1.8; }
   label { display:block; font-size:13px; color:#333; margin:14px 0 6px; }
   input { width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px; font-family:monospace; text-align:center; letter-spacing:1px; }
+
+  .type-toggle { display:flex; gap:8px; margin-top:6px; }
+  .type-toggle button { flex:1; padding:10px; border:1.5px solid #e5e7eb; background:#fff; color:#374151; border-radius:8px; font-size:13px; cursor:pointer; }
+  .type-toggle button.active { background:#0f766e; border-color:#0f766e; color:#fff; }
+
+  .days-row { display:none; }
+  .days-row.show { display:block; }
+
   button.go { width:100%; margin-top:18px; padding:12px; background:#0f766e; color:#fff; border:none; border-radius:10px; font-size:15px; cursor:pointer; }
   button.go:hover { background:#0d5f58; }
   .result-box { margin-top:20px; background:#f0fdfa; border:1.5px dashed #0f766e; border-radius:10px; padding:16px; text-align:center; display:none; }
-  .result-box .key { font-family:monospace; font-size:20px; font-weight:bold; color:#0f766e; letter-spacing:2px; user-select:all; margin-bottom:8px; }
+  .result-box .key { font-family:monospace; font-size:19px; font-weight:bold; color:#0f766e; letter-spacing:1px; user-select:all; margin-bottom:6px; word-break:break-all; }
+  .result-box .expiry { font-size:12px; color:#b45309; margin-bottom:8px; }
   .result-box button { background:#fff; border:1px solid #0f766e; color:#0f766e; padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; }
   .msg { margin-top:10px; font-size:13px; text-align:center; color:#b91c1c; min-height:16px; }
   .secret-note { margin-top:24px; font-size:11px; color:#aaa; text-align:center; line-height:1.7; border-top:1px solid #eee; padding-top:14px; }
@@ -23,16 +32,28 @@
 <body>
   <div class="card">
     <h1>🔑 مولّد مفاتيح التفعيل</h1>
-    <p class="sub">أداة المطوّر — أدخل رمز جهاز العميل (يظهر له من شاشة القفل أو الإعدادات) وستحصل على مفتاح التفعيل الخاص بذاك الجهاز فقط.</p>
+    <p class="sub">أداة المطوّر — أدخل رمز جهاز العميل (يظهر له من شاشة القفل أو الإعدادات) واختر نوع المفتاح.</p>
 
     <label>رمز جهاز العميل (Device ID)</label>
     <input id="device-id" placeholder="مثال: A1B2C3D4E5F60708" oninput="clearResult()">
+
+    <label>نوع المفتاح</label>
+    <div class="type-toggle">
+      <button type="button" id="btn-permanent" class="active" onclick="setType('permanent')">دائم (بدون انتهاء)</button>
+      <button type="button" id="btn-temporary" onclick="setType('temporary')">مؤقت (عدد أيام)</button>
+    </div>
+
+    <div class="days-row" id="days-row">
+      <label>عدد أيام الصلاحية</label>
+      <input id="days-input" type="number" min="1" value="7" style="text-align:center">
+    </div>
 
     <button class="go" onclick="generate()">توليد مفتاح التفعيل</button>
     <div class="msg" id="msg"></div>
 
     <div class="result-box" id="result-box">
       <div class="key" id="result-key">----</div>
+      <div class="expiry" id="result-expiry"></div>
       <button onclick="copyKey()">📋 نسخ المفتاح</button>
     </div>
 
@@ -45,6 +66,15 @@
 <script>
   // ⚠️ يجب أن تطابق هذه القيمة تمامًا LICENSE_SECRET في src/main/main.js
   const LICENSE_SECRET = 'NHk6rbUAbBXSafpzWyZgioOAglOH9B';
+  let currentType = 'permanent';
+
+  function setType(type) {
+    currentType = type;
+    document.getElementById('btn-permanent').classList.toggle('active', type === 'permanent');
+    document.getElementById('btn-temporary').classList.toggle('active', type === 'temporary');
+    document.getElementById('days-row').classList.toggle('show', type === 'temporary');
+    clearResult();
+  }
 
   function normalizeDeviceId(id) {
     return (id || '').toUpperCase().replace(/[^A-F0-9]/g, '');
@@ -57,11 +87,21 @@
     return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  async function generateKey(deviceId) {
+  async function generatePermanentKey(deviceId) {
     const normalized = normalizeDeviceId(deviceId);
     const hex = await hmacSha256Hex(LICENSE_SECRET, normalized);
     const shortHex = hex.slice(0, 20).toUpperCase();
     return shortHex.match(/.{1,4}/g).join('-');
+  }
+
+  async function generateTemporaryKey(deviceId, days) {
+    const normalized = normalizeDeviceId(deviceId);
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + Number(days));
+    const yyyymmdd = expiry.toISOString().slice(0, 10).replace(/-/g, '');
+    const hex = await hmacSha256Hex(LICENSE_SECRET, normalized + '|' + yyyymmdd);
+    const sig = hex.slice(0, 12).toUpperCase();
+    return { key: `TRIAL-${yyyymmdd}-${sig}`, expiryDate: expiry.toISOString().slice(0, 10) };
   }
 
   function clearResult() {
@@ -76,8 +116,18 @@
     const normalized = normalizeDeviceId(raw);
     if (normalized.length < 8) { msg.textContent = 'رمز الجهاز غير صالح — تأكد من نسخه كاملًا من البرنامج'; return; }
     msg.textContent = '';
-    const key = await generateKey(raw);
-    document.getElementById('result-key').textContent = key;
+
+    const expiryLine = document.getElementById('result-expiry');
+    if (currentType === 'permanent') {
+      const key = await generatePermanentKey(raw);
+      document.getElementById('result-key').textContent = key;
+      expiryLine.textContent = '';
+    } else {
+      const days = document.getElementById('days-input').value || 7;
+      const temp = await generateTemporaryKey(raw, days);
+      document.getElementById('result-key').textContent = temp.key;
+      expiryLine.textContent = `⏳ صالح حتى تاريخ: ${temp.expiryDate} (${days} يوم من الآن)`;
+    }
     document.getElementById('result-box').style.display = 'block';
   }
 

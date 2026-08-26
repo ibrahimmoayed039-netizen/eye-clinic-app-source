@@ -83,7 +83,7 @@ async function saveSupplier(id) {
   try {
     if (id) await API.put(`/api/suppliers/${id}`, data);
     else await API.post('/api/suppliers', data);
-    document.querySelector('.modal-overlay').remove();
+    closeTopModal();
     loadSuppliers();
   } catch (err) {
     showAlertModal('تعذر حفظ بيانات المورد: ' + err.message);
@@ -151,7 +151,7 @@ async function addSupplierTransaction(supplierId, type) {
     await API.post(`/api/suppliers/${supplierId}/transactions`, {
       type, amount, description: description || '', employee_id: CURRENT_USER.id
     });
-    document.querySelector('.modal-overlay').remove();
+    closeTopModal();
     await loadSuppliers();
     openSupplierLedger(supplierId);
   } catch (err) {

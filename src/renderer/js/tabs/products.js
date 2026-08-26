@@ -9,7 +9,7 @@ async function renderProductsTab(container) {
         <input id="pr-search" placeholder="بحث بالاسم أو الباركود..." style="width:220px" oninput="loadProducts()">
         <select id="pr-category-filter" onchange="loadProducts()">
           <option value="">كل الفئات</option>
-          ${ALL_CATEGORIES_CACHE.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+          ${categoryOptionsHtml(ALL_CATEGORIES_CACHE, '')}
         </select>
         <button class="btn secondary" onclick="openCategoryManager()">🏷️ إدارة الفئات</button>
         <button class="btn" onclick="openProductModal()">+ إضافة منتج</button>
@@ -65,12 +65,12 @@ function openCategoryManager() {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
-    <div class="modal" style="width:420px">
-      <h3>🏷️ إدارة الفئات</h3>
+    <div class="modal" style="width:460px">
+      <h3>🏷️ إدارة الفئات والفروع</h3>
       <div id="cat-list"></div>
       <div style="display:flex;gap:8px;margin-top:12px">
-        <input id="new-cat-name" placeholder="اسم فئة جديدة" style="flex:1;padding:9px 10px;border:1px solid #ddd;border-radius:8px">
-        <button class="btn small" onclick="addCategory()">+ إضافة</button>
+        <input id="new-cat-name" placeholder="اسم فئة رئيسية جديدة" style="flex:1;padding:9px 10px;border:1px solid #ddd;border-radius:8px">
+        <button class="btn small" onclick="addCategory()">+ إضافة فئة</button>
       </div>
       <div class="modal-actions">
         <button class="btn secondary" onclick="this.closest('.modal-overlay').remove(); loadProducts()">إغلاق</button>
@@ -86,12 +86,28 @@ async function renderCategoryList() {
   ALL_CATEGORIES_CACHE = cats;
   const box = document.getElementById('cat-list');
   if (!box) return;
-  box.innerHTML = cats.length ? cats.map(c => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #eee">
-      <span>${c.name}</span>
-      <button class="btn small danger" onclick="deleteCategory(${c.id})">حذف</button>
-    </div>
-  `).join('') : '<div class="empty" style="padding:10px">لا توجد فئات بعد</div>';
+  const mains = cats.filter(c => !c.parent_id);
+  if (!mains.length) { box.innerHTML = '<div class="empty" style="padding:10px">لا توجد فئات بعد</div>'; return; }
+  box.innerHTML = mains.map(m => {
+    const children = cats.filter(c => c.parent_id === m.id);
+    return `
+      <div style="border-bottom:1px solid #eee;padding:6px 0">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">${m.name}</span>
+          <div style="display:flex;gap:4px">
+            <button class="btn small secondary" onclick="addBranch(${m.id}, '${m.name.replace(/'/g, "")}')">+ فرع</button>
+            <button class="btn small danger" onclick="deleteCategory(${m.id}, ${children.length})">حذف</button>
+          </div>
+        </div>
+        ${children.map(c => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0 5px 22px;color:#555;font-size:13px">
+            <span>└ ${c.name}</span>
+            <button class="btn small danger" onclick="deleteCategory(${c.id}, 0)">حذف</button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
 }
 
 async function addCategory() {
@@ -107,10 +123,34 @@ async function addCategory() {
   }
 }
 
-async function deleteCategory(id) {
-  if (!(await showConfirmModal('حذف هذه الفئة؟'))) return;
+async function addBranch(parentId, parentName) {
+  const name = await showPromptModal(`اسم الفرع الجديد تحت "${parentName}":`);
+  if (!name || !name.trim()) return;
+  try {
+    await API.post('/api/categories', { name: name.trim(), parent_id: parentId });
+    renderCategoryList();
+  } catch (err) {
+    showAlertModal('تعذر إضافة الفرع: ' + err.message);
+  }
+}
+
+async function deleteCategory(id, childrenCount) {
+  const msg = childrenCount > 0
+    ? `هذه الفئة تحتوي على ${childrenCount} فرع/فروع، سيتم حذفها جميعًا. متابعة؟`
+    : 'حذف هذه الفئة؟';
+  if (!(await showConfirmModal(msg))) return;
   await API.del(`/api/categories/${id}`);
   renderCategoryList();
+}
+
+function categoryOptionsHtml(cats, selectedName) {
+  const mains = cats.filter(c => !c.parent_id);
+  return mains.map(m => {
+    const children = cats.filter(c => c.parent_id === m.id);
+    const own = `<option value="${m.name}" ${selectedName === m.name ? 'selected' : ''}>${m.name}</option>`;
+    const branches = children.map(c => `<option value="${c.name}" ${selectedName === c.name ? 'selected' : ''}>&nbsp;&nbsp;└ ${c.name}</option>`).join('');
+    return own + branches;
+  }).join('');
 }
 
 async function addCategoryInline() {
@@ -141,7 +181,7 @@ async function openProductModal(id) {
           <div style="display:flex;gap:6px">
             <select id="pf-category" style="flex:1">
               <option value="">بدون فئة</option>
-              ${cats.map(c => `<option value="${c.name}" ${p.category===c.name?'selected':''}>${c.name}</option>`).join('')}
+              ${categoryOptionsHtml(cats, p.category)}
             </select>
             <button type="button" class="btn small secondary" onclick="addCategoryInline()">+</button>
           </div>
@@ -174,7 +214,7 @@ async function saveProduct(id) {
   try {
     if (id) await API.put(`/api/products/${id}`, data);
     else await API.post('/api/products', data);
-    document.querySelector('.modal-overlay').remove();
+    closeTopModal();
     loadProducts();
   } catch (err) {
     showAlertModal('تعذر حفظ المنتج: ' + err.message);

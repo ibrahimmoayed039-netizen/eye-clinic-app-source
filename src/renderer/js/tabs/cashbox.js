@@ -227,7 +227,7 @@ async function saveExpense() {
   if (data.amount <= 0) { showAlertModal('الرجاء إدخال مبلغ صحيح'); return; }
   try {
     await API.post('/api/expenses', data);
-    document.querySelector('.modal-overlay').remove();
+    closeTopModal();
     loadExpenses();
   } catch (err) {
     showAlertModal('تعذر حفظ المصروف: ' + err.message);

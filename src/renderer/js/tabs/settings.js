@@ -180,9 +180,17 @@ async function renderLicenseCard() {
   if (!box) return;
   const status = await window.desktop.getLicenseStatus();
   if (status.activated) {
+    const typeLine = status.licenseType === 'temporary'
+      ? `<p style="font-size:13px;color:#b45309">🕐 تفعيل مؤقت — ينتهي بتاريخ <b>${status.expiresOn}</b> (متبقٍّ ${status.daysLeft} يوم).</p>`
+      : `<p style="font-size:13px;color:#0f766e">✅ البرنامج مُفعّل بشكل دائم على هذا الجهاز.</p>`;
     box.innerHTML = `
-      <p style="font-size:13px;color:#0f766e">✅ البرنامج مُفعّل بشكل دائم على هذا الجهاز.</p>
+      ${typeLine}
       <p style="font-size:12px;color:#888">رمز الجهاز: <span style="font-family:monospace">${status.deviceId}</span></p>
+      ${status.licenseType === 'temporary' ? `
+      <div class="form-group" style="margin-top:10px"><label>تجديد/ترقية مفتاح التفعيل</label>
+        <input id="st-license-key" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX أو TRIAL-...">
+      </div>
+      <button class="btn small" onclick="activateLicenseFromSettings()">تحديث المفتاح</button>` : ''}
     `;
     return;
   }
@@ -195,7 +203,7 @@ async function renderLicenseCard() {
         <input value="${status.deviceId}" readonly style="font-family:monospace;text-align:center">
       </div>
       <div class="form-group"><label>مفتاح التفعيل</label>
-        <input id="st-license-key" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" style="font-family:monospace;text-align:center">
+        <input id="st-license-key" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX أو TRIAL-..." style="font-family:monospace;text-align:center">
       </div>
     </div>
     <button class="btn" onclick="activateLicenseFromSettings()">تفعيل البرنامج</button>
