@@ -47,8 +47,12 @@ function goToExamsFor(id, name) {
 
 async function deletePatient(id) {
   if (!(await showConfirmModal('هل أنت متأكد من حذف هذا المريض؟'))) return;
-  await API.del(`/api/patients/${id}`);
-  loadPatients();
+  try {
+    await API.del(`/api/patients/${id}`);
+    loadPatients();
+  } catch (err) {
+    showAlertModal('تعذر حذف المريض: ' + err.message);
+  }
 }
 
 let PATIENT_MODAL_CALLBACK = null;
@@ -115,7 +119,7 @@ async function loadCustomerStatementPreview(id) {
   box.innerHTML = `
     <p style="margin-bottom:8px;font-size:13px">الرصيد الافتتاحي: <b>${statement.opening_balance.toLocaleString('ar')} د.ع</b></p>
     <table>
-      <thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>
+      <thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th><th></th></tr></thead>
       <tbody>
         ${statement.entries.length ? statement.entries.map(e => `
           <tr>
@@ -124,12 +128,57 @@ async function loadCustomerStatementPreview(id) {
             <td>${e.debit ? e.debit.toLocaleString('ar') : '-'}</td>
             <td>${e.credit ? e.credit.toLocaleString('ar') : '-'}</td>
             <td>${e.balance.toLocaleString('ar')}</td>
+            <td>${e.invoice_id ? `<button class="btn small secondary" onclick="viewInvoiceItemsModal(${e.invoice_id})">عرض</button>` : ''}</td>
           </tr>
-        `).join('') : '<tr><td colspan="5" class="empty">لا توجد حركات بهذه الفترة</td></tr>'}
+        `).join('') : '<tr><td colspan="6" class="empty">لا توجد حركات بهذه الفترة</td></tr>'}
       </tbody>
     </table>
     <p style="margin-top:8px;font-size:14px"><b>الرصيد الختامي: ${statement.closing_balance.toLocaleString('ar')} د.ع</b></p>
   `;
+}
+
+async function viewInvoiceItemsModal(invoiceId) {
+  let invoice;
+  try {
+    invoice = await API.get(`/api/invoices/${invoiceId}`);
+  } catch (err) {
+    showAlertModal('تعذر جلب تفاصيل الفاتورة: ' + err.message);
+    return;
+  }
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="width:520px">
+      <h3>🧾 فاتورة رقم ${invoice.invoice_number}</h3>
+      <p style="font-size:12px;color:#666;margin-bottom:10px">
+        التاريخ: ${(invoice.invoice_date||'').split(' ')[0]} — الموظف: ${invoice.employee_name || '-'}
+      </p>
+      <table>
+        <thead><tr><th>الصنف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
+        <tbody>
+          ${invoice.items.length ? invoice.items.map(it => `
+            <tr>
+              <td>${it.description || '-'}</td>
+              <td>${it.qty}</td>
+              <td>${Number(it.unit_price).toLocaleString('ar')}</td>
+              <td>${Number(it.total).toLocaleString('ar')}</td>
+            </tr>
+          `).join('') : '<tr><td colspan="4" class="empty">لا توجد عناصر بهذه الفاتورة</td></tr>'}
+        </tbody>
+      </table>
+      <div style="margin-top:10px;font-size:13px;line-height:2">
+        <div>الخصم: <b>${Number(invoice.discount || 0).toLocaleString('ar')}</b> د.ع</div>
+        <div>الإجمالي: <b>${Number(invoice.total).toLocaleString('ar')}</b> د.ع</div>
+        <div>المدفوع: <b>${Number(invoice.paid_amount).toLocaleString('ar')}</b> د.ع</div>
+        <div>المتبقي: <b style="color:${(invoice.total - invoice.paid_amount) > 0 ? '#b91c1c' : '#0f766e'}">${(invoice.total - invoice.paid_amount).toLocaleString('ar')}</b> د.ع</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn secondary" onclick="closeTopModal()">إغلاق</button>
+        <button class="btn" onclick="promptPrintChoice(${invoice.id})">🖨️ طباعة الفاتورة</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
 }
 
 async function printCustomerStatement(id, name) {

@@ -45,8 +45,12 @@ async function loadSuppliers() {
 
 async function deleteSupplier(id) {
   if (!(await showConfirmModal('حذف هذا المورد وكل سجل معاملاته؟'))) return;
-  await API.del(`/api/suppliers/${id}`);
-  loadSuppliers();
+  try {
+    await API.del(`/api/suppliers/${id}`);
+    loadSuppliers();
+  } catch (err) {
+    showAlertModal('تعذر حذف المورد: ' + err.message);
+  }
 }
 
 async function openSupplierModal(id) {
@@ -142,7 +146,7 @@ async function printSupplierStatement(id, name) {
 
 async function addSupplierTransaction(supplierId, type) {
   const label = type === 'purchase' ? 'مبلغ فاتورة الشراء' : 'مبلغ التسديد';
-  const amountStr = await showPromptModal(`${label}:`, '0');
+  const amountStr = await showPromptModal(`${label}:`, '0', { money: true });
   if (amountStr === null) return;
   const amount = parseFloat(amountStr);
   if (!amount || amount <= 0) { showAlertModal('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }

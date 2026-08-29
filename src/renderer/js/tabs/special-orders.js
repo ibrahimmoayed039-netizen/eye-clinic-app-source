@@ -142,7 +142,7 @@ function openNewSpecialOrderModal() {
             <option value="">-- غير محدد --</option>
           </select>
         </div>
-        <div class="form-group"><label>السعر المتوقع للزبون (د.ع)</label><input id="so-expected-price" type="number" value="0"></div>
+        <div class="form-group"><label>السعر المتوقع للزبون (د.ع)</label><input id="so-expected-price" inputmode="decimal" value="0" oninput="formatNumberInput(this)"></div>
       </div>
       <div class="form-group"><label>العربون المدفوع الآن (د.ع)</label><input id="so-deposit" type="number" value="0"></div>
       <div class="form-group"><label>ملاحظات</label><input id="so-notes" placeholder="أي تفاصيل إضافية..."></div>
@@ -196,7 +196,7 @@ async function submitNewSpecialOrder() {
     customer_phone: document.getElementById('so-customer-phone').value.trim(),
     item_description: itemDesc,
     supplier_id: document.getElementById('so-supplier').value || null,
-    expected_price: parseFloat(document.getElementById('so-expected-price').value) || 0,
+    expected_price: unformatNumber(document.getElementById('so-expected-price').value),
     deposit_amount: parseFloat(document.getElementById('so-deposit').value) || 0,
     notes: document.getElementById('so-notes').value.trim(),
     employee_id: CURRENT_USER.id,
@@ -230,10 +230,10 @@ async function openDeliverSpecialOrderModal(id) {
       </div>
       <div class="grid-2">
         <div class="form-group"><label>الكمية</label><input id="do-qty" type="number" value="1"></div>
-        <div class="form-group"><label>سعر البيع النهائي للوحدة (د.ع)</label><input id="do-price" type="number" value="${order.expected_price}"></div>
+        <div class="form-group"><label>سعر البيع النهائي للوحدة (د.ع)</label><input id="do-price" inputmode="decimal" value="${fmtNum(order.expected_price)}" oninput="formatNumberInput(this)"></div>
       </div>
       <div class="grid-2">
-        <div class="form-group"><label>الخصم (د.ع)</label><input id="do-discount" type="number" value="0"></div>
+        <div class="form-group"><label>الخصم (د.ع)</label><input id="do-discount" inputmode="decimal" value="0" oninput="formatNumberInput(this)"></div>
         <div class="form-group"><label>طريقة الدفع</label>
           <select id="do-payment">
             <option>نقدي</option>
@@ -242,7 +242,7 @@ async function openDeliverSpecialOrderModal(id) {
           </select>
         </div>
       </div>
-      <div class="form-group"><label>مبلغ إضافي يُدفع الآن (بخلاف العربون)</label><input id="do-paid" type="number" value="0"></div>
+      <div class="form-group"><label>مبلغ إضافي يُدفع الآن (بخلاف العربون)</label><input id="do-paid" inputmode="decimal" value="0" oninput="formatNumberInput(this)"></div>
       <div class="modal-actions">
         <button class="btn secondary" onclick="this.closest('.modal-overlay').remove()">إلغاء</button>
         <button class="btn" onclick="submitDeliverSpecialOrder(${id})">✅ تسليم وإصدار فاتورة</button>
@@ -253,7 +253,7 @@ async function openDeliverSpecialOrderModal(id) {
   document.getElementById('do-product').addEventListener('change', function () {
     const opt = this.selectedOptions[0];
     const price = opt ? opt.dataset.price : null;
-    if (price) document.getElementById('do-price').value = price;
+    if (price) document.getElementById('do-price').value = fmtNum(price);
   });
 }
 
@@ -261,10 +261,10 @@ async function submitDeliverSpecialOrder(id) {
   const payload = {
     product_id: document.getElementById('do-product').value || null,
     qty: parseFloat(document.getElementById('do-qty').value) || 1,
-    unit_price: parseFloat(document.getElementById('do-price').value),
-    discount: parseFloat(document.getElementById('do-discount').value) || 0,
+    unit_price: unformatNumber(document.getElementById('do-price').value),
+    discount: unformatNumber(document.getElementById('do-discount').value),
     payment_method: document.getElementById('do-payment').value,
-    paid_amount: parseFloat(document.getElementById('do-paid').value) || 0,
+    paid_amount: unformatNumber(document.getElementById('do-paid').value),
     employee_id: CURRENT_USER.id,
   };
   if (isNaN(payload.unit_price) || payload.unit_price < 0) { showAlertModal('الرجاء إدخال سعر بيع صحيح'); return; }

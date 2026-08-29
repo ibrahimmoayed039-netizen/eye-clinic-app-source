@@ -96,7 +96,7 @@ async function openNewCashbox() {
 
 async function addCashMovement(boxId, type) {
   const label = type === 'deposit' ? 'مبلغ الإيداع' : 'مبلغ السحب';
-  const amountStr = await showPromptModal(`${label}:`, '0');
+  const amountStr = await showPromptModal(`${label}:`, '0', { money: true });
   if (amountStr === null) return;
   const amount = parseFloat(amountStr);
   if (!amount || amount <= 0) { showAlertModal('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
@@ -146,7 +146,7 @@ async function viewCashboxDetails(boxId) {
 
 async function closeCashbox(boxId) {
   const box = await API.get(`/api/cashboxes/${boxId}`);
-  const input = await showPromptModal(`المبلغ المتوقع بالصندوق: ${box.expected_balance.toLocaleString('ar')} د.ع<br>أدخل المبلغ الفعلي بعد العد اليدوي:`, box.expected_balance);
+  const input = await showPromptModal(`المبلغ المتوقع بالصندوق: ${box.expected_balance.toLocaleString('ar')} د.ع<br>أدخل المبلغ الفعلي بعد العد اليدوي:`, box.expected_balance, { money: true });
   if (input === null) return;
   const closing_balance = parseFloat(input);
   if (isNaN(closing_balance)) { showAlertModal('الرجاء إدخال رقم صحيح'); return; }
@@ -197,7 +197,7 @@ async function openAddExpenseModal() {
       <h3>+ تسجيل مصروف جديد</h3>
       <div class="grid-2">
         <div class="form-group"><label>الوصف</label><input id="ex-desc" placeholder="مثال: فاتورة كهرباء"></div>
-        <div class="form-group"><label>المبلغ (د.ع)</label><input id="ex-amount" type="number"></div>
+        <div class="form-group"><label>المبلغ (د.ع)</label><input id="ex-amount" inputmode="decimal" oninput="formatNumberInput(this)"></div>
         <div class="form-group"><label>الفئة</label>
           <select id="ex-category">
             <option>إيجار</option><option>كهرباء وماء</option><option>رواتب</option>
@@ -218,7 +218,7 @@ async function openAddExpenseModal() {
 async function saveExpense() {
   const data = {
     description: document.getElementById('ex-desc').value.trim(),
-    amount: parseFloat(document.getElementById('ex-amount').value) || 0,
+    amount: unformatNumber(document.getElementById('ex-amount').value),
     category: document.getElementById('ex-category').value,
     notes: document.getElementById('ex-notes').value.trim(),
     employee_id: CURRENT_USER.id,
@@ -236,6 +236,10 @@ async function saveExpense() {
 
 async function deleteExpense(id) {
   if (!(await showConfirmModal('حذف هذا المصروف؟'))) return;
-  await API.del(`/api/expenses/${id}`);
-  loadExpenses();
+  try {
+    await API.del(`/api/expenses/${id}`);
+    loadExpenses();
+  } catch (err) {
+    showAlertModal('تعذر حذف المصروف: ' + err.message);
+  }
 }

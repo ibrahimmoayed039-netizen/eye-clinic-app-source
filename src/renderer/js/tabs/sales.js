@@ -50,7 +50,7 @@ async function renderSalesTab(container, restoreData) {
       </div>
       <div id="cart-table"></div>
       <div class="grid-3" style="margin-top:12px">
-        <div class="form-group"><label>الخصم (د.ع)</label><input id="s-discount" type="number" value="${draft ? (draft.discount || 0) : 0}" oninput="renderCartTable(); SALES_DRAFT_DISCOUNT=this.value"></div>
+        <div class="form-group"><label>الخصم (د.ع)</label><input id="s-discount" inputmode="decimal" value="${fmtNum(draft ? (draft.discount || 0) : 0)}" oninput="formatNumberInput(this); renderCartTable(); SALES_DRAFT_DISCOUNT=unformatNumber(this.value)"></div>
         <div class="form-group"><label>طريقة الدفع</label>
           <select id="s-payment" onchange="SALES_DRAFT_PAYMENT=this.value">
             <option ${draft && draft.payment==='نقدي' ? 'selected':''}>نقدي</option>
@@ -63,7 +63,7 @@ async function renderSalesTab(container, restoreData) {
         </div>
       </div>
       <div class="grid-2">
-        <div class="form-group"><label>المبلغ المدفوع</label><input id="s-paid" type="number" value="0" oninput="SALES_UNDERPAY_ACK=false"></div>
+        <div class="form-group"><label>المبلغ المدفوع</label><input id="s-paid" inputmode="decimal" value="0" oninput="formatNumberInput(this); SALES_UNDERPAY_ACK=false"></div>
         <div class="form-group"><label>ملاحظات</label><input id="s-notes" value="${draft ? (draft.notes || '') : ''}" oninput="SALES_DRAFT_NOTES=this.value"></div>
       </div>
       <div id="cart-total" style="font-size:16px;font-weight:700;margin:10px 0"></div>
@@ -231,7 +231,7 @@ function addToCart(productId, name, price) {
 async function addCustomItem() {
   const name = await showPromptModal('اسم الخدمة/المنتج المخصص:');
   if (!name) return;
-  const priceStr = await showPromptModal('السعر:', '0');
+  const priceStr = await showPromptModal('السعر:', '0', { money: true });
   const price = parseFloat(priceStr) || 0;
   CART.push({ product_id: null, description: name, qty: 1, unit_price: price });
   renderCartTable();
@@ -281,7 +281,7 @@ function renderCartTable() {
     `;
   }
   const subtotal = CART.reduce((s, c) => s + c.qty * c.unit_price, 0);
-  const discount = parseFloat(document.getElementById('s-discount')?.value) || 0;
+  const discount = unformatNumber(document.getElementById('s-discount')?.value);
   const total = Math.max(0, subtotal - discount);
   const currency = SALES_SETTINGS_CACHE.invoice_currency || 'IQD';
   const rate = parseFloat(SALES_SETTINGS_CACHE.exchange_rate) || 1310;
@@ -295,9 +295,9 @@ function renderCartTable() {
 async function submitInvoice() {
   if (!CART.length) { showAlertModal('أضف عناصر للفاتورة أولاً'); return; }
   const subtotal = CART.reduce((s, c) => s + c.qty * c.unit_price, 0);
-  const discount = parseFloat(document.getElementById('s-discount').value) || 0;
+  const discount = unformatNumber(document.getElementById('s-discount').value);
   const total = Math.max(0, subtotal - discount);
-  const paid = parseFloat(document.getElementById('s-paid').value) || 0;
+  const paid = unformatNumber(document.getElementById('s-paid').value);
 
   if (paid < total && !SALES_UNDERPAY_ACK) {
     SALES_UNDERPAY_ACK = true;
@@ -332,7 +332,7 @@ async function reprintInvoice(id) { promptPrintChoice(id); }
 
 async function collectPayment(invoiceId, total, paidAmount, refreshFn) {
   const remaining = total - paidAmount;
-  const input = await showPromptModal(`المتبقي على هذه الفاتورة: ${remaining.toLocaleString('ar')} د.ع<br>أدخل المبلغ المُسدَّد الآن:`, remaining);
+  const input = await showPromptModal(`المتبقي على هذه الفاتورة: ${remaining.toLocaleString('ar')} د.ع<br>أدخل المبلغ المُسدَّد الآن:`, remaining, { money: true });
   if (input === null) return;
   const amount = parseFloat(input);
   if (!amount || amount <= 0) { showAlertModal('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
@@ -390,7 +390,7 @@ async function holdCurrentInvoice() {
     time: new Date().toLocaleTimeString('ar'),
     cart: CART,
     patient: window.SELECTED_PATIENT,
-    discount: document.getElementById('s-discount').value,
+    discount: unformatNumber(document.getElementById('s-discount').value),
     payment: document.getElementById('s-payment').value,
     notes: document.getElementById('s-notes').value,
   });

@@ -117,14 +117,41 @@ function showConfirmModal(message) {
 }
 
 // نافذة إدخال نص مخصصة — بديل ضروري لأن window.prompt() غير مدعوم فعليًا في Electron
-function showPromptModal(title, defaultValue) {
+// إضافة فواصل الآلاف أثناء الكتابة بحقول المبالغ (لتسهيل قراءة الأرقام الكبيرة)
+// تُستخدم مع حقول <input type="text"> عبر oninput="formatNumberInput(this)"
+function formatNumberInput(el) {
+  const cursorFromEnd = el.value.length - el.selectionStart;
+  let raw = el.value.replace(/[^0-9.]/g, '');
+  const parts = raw.split('.');
+  if (parts.length > 2) raw = parts[0] + '.' + parts.slice(1).join(''); // فاصلة عشرية واحدة فقط
+  const [intPart, decPart] = raw.split('.');
+  const formattedInt = (intPart || '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  el.value = decPart !== undefined ? `${formattedInt}.${decPart}` : formattedInt;
+  const newPos = Math.max(0, el.value.length - cursorFromEnd);
+  el.setSelectionRange(newPos, newPos);
+}
+
+// إزالة فواصل الآلاف وتحويل النص لرقم فعلي — تُستخدم عند قراءة قيمة الحقل للحفظ/الحساب
+function unformatNumber(val) {
+  return parseFloat(String(val ?? '').replace(/,/g, '')) || 0;
+}
+
+// تنسيق رقم بفواصل الآلاف لعرضه كقيمة ابتدائية داخل حقل إدخال
+function fmtNum(n) {
+  const num = Number(n) || 0;
+  return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function showPromptModal(title, defaultValue, opts) {
+  const isMoney = opts && opts.money;
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
+    const initialValue = defaultValue !== undefined && defaultValue !== null ? defaultValue : '';
     overlay.innerHTML = `
       <div class="modal" style="width:380px">
         <h3>${title}</h3>
-        <div class="form-group"><input id="prompt-modal-input" value="${defaultValue !== undefined && defaultValue !== null ? defaultValue : ''}"></div>
+        <div class="form-group"><input id="prompt-modal-input" ${isMoney ? 'inputmode="decimal" oninput="formatNumberInput(this)"' : ''} value="${isMoney ? fmtNum(initialValue) : initialValue}"></div>
         <div class="modal-actions">
           <button class="btn secondary" id="prompt-modal-cancel">إلغاء</button>
           <button class="btn" id="prompt-modal-ok">موافق</button>
@@ -136,10 +163,11 @@ function showPromptModal(title, defaultValue) {
     input.focus();
     input.select();
     const cleanup = (result) => { overlay.remove(); resolve(result); };
-    overlay.querySelector('#prompt-modal-ok').onclick = () => cleanup(input.value);
+    const resolveValue = () => cleanup(isMoney ? String(unformatNumber(input.value)) : input.value);
+    overlay.querySelector('#prompt-modal-ok').onclick = resolveValue;
     overlay.querySelector('#prompt-modal-cancel').onclick = () => cleanup(null);
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') cleanup(input.value);
+      if (e.key === 'Enter') resolveValue();
       if (e.key === 'Escape') cleanup(null);
     });
   });

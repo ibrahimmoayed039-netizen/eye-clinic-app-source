@@ -57,8 +57,12 @@ async function loadProducts() {
 
 async function deleteProduct(id) {
   if (!(await showConfirmModal('حذف هذا المنتج؟'))) return;
-  await API.del(`/api/products/${id}`);
-  loadProducts();
+  try {
+    await API.del(`/api/products/${id}`);
+    loadProducts();
+  } catch (err) {
+    showAlertModal('تعذر حذف المنتج: ' + err.message);
+  }
 }
 
 function openCategoryManager() {
@@ -139,8 +143,12 @@ async function deleteCategory(id, childrenCount) {
     ? `هذه الفئة تحتوي على ${childrenCount} فرع/فروع، سيتم حذفها جميعًا. متابعة؟`
     : 'حذف هذه الفئة؟';
   if (!(await showConfirmModal(msg))) return;
-  await API.del(`/api/categories/${id}`);
-  renderCategoryList();
+  try {
+    await API.del(`/api/categories/${id}`);
+    renderCategoryList();
+  } catch (err) {
+    showAlertModal('تعذر حذف الفئة: ' + err.message);
+  }
 }
 
 function categoryOptionsHtml(cats, selectedName) {
@@ -188,8 +196,8 @@ async function openProductModal(id) {
         </div>
         <div class="form-group"><label>الباركود</label><input id="pf-barcode" value="${p.barcode || ''}"></div>
         <div class="form-group"><label>الكمية بالمخزون</label><input id="pf-stock" type="number" value="${p.stock_qty}"></div>
-        <div class="form-group"><label>سعر البيع</label><input id="pf-price" type="number" step="0.01" value="${p.price}"></div>
-        <div class="form-group"><label>التكلفة</label><input id="pf-cost" type="number" step="0.01" value="${p.cost}"></div>
+        <div class="form-group"><label>سعر البيع</label><input id="pf-price" inputmode="decimal" oninput="formatNumberInput(this)" value="${fmtNum(p.price)}"></div>
+        <div class="form-group"><label>التكلفة</label><input id="pf-cost" inputmode="decimal" oninput="formatNumberInput(this)" value="${fmtNum(p.cost)}"></div>
       </div>
       <div class="modal-actions">
         <button class="btn secondary" onclick="this.closest('.modal-overlay').remove()">إلغاء</button>
@@ -206,8 +214,8 @@ async function saveProduct(id) {
     category: document.getElementById('pf-category').value,
     barcode: document.getElementById('pf-barcode').value.trim(),
     stock_qty: parseInt(document.getElementById('pf-stock').value) || 0,
-    price: parseFloat(document.getElementById('pf-price').value) || 0,
-    cost: parseFloat(document.getElementById('pf-cost').value) || 0,
+    price: unformatNumber(document.getElementById('pf-price').value),
+    cost: unformatNumber(document.getElementById('pf-cost').value),
   };
   if (!data.name) { showAlertModal('الرجاء إدخال اسم المنتج'); return; }
   if (data.price < 0 || data.cost < 0 || data.stock_qty < 0) { showAlertModal('لا يمكن أن يكون السعر أو التكلفة أو الكمية بقيمة سالبة'); return; }

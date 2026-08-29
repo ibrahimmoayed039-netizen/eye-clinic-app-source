@@ -99,7 +99,7 @@ async function printPurchaseInvoice(id) {
 
 async function collectPurchasePayment(id, total, paidAmount) {
   const remaining = total - paidAmount;
-  const input = await showPromptModal(`المتبقي على فاتورة الشراء هذه: ${remaining.toLocaleString('ar')} د.ع<br>أدخل المبلغ المُسدَّد الآن:`, remaining);
+  const input = await showPromptModal(`المتبقي على فاتورة الشراء هذه: ${remaining.toLocaleString('ar')} د.ع<br>أدخل المبلغ المُسدَّد الآن:`, remaining, { money: true });
   if (input === null) return;
   const amount = parseFloat(input);
   if (!amount || amount <= 0) { showAlertModal('الرجاء إدخال مبلغ صحيح أكبر من صفر'); return; }
@@ -159,8 +159,8 @@ async function renderNewPurchaseForm(container) {
       </div>
       <div id="purchase-cart-table"></div>
       <div class="grid-2" style="margin-top:12px">
-        <div class="form-group"><label>الخصم (د.ع)</label><input id="pu-discount" type="number" value="0" oninput="renderPurchaseCartTable()"></div>
-        <div class="form-group"><label>المبلغ المدفوع الآن</label><input id="pu-paid" type="number" value="0"></div>
+        <div class="form-group"><label>الخصم (د.ع)</label><input id="pu-discount" inputmode="decimal" value="0" oninput="formatNumberInput(this); renderPurchaseCartTable()"></div>
+        <div class="form-group"><label>المبلغ المدفوع الآن</label><input id="pu-paid" inputmode="decimal" value="0" oninput="formatNumberInput(this)"></div>
       </div>
       <div class="form-group"><label>ملاحظات</label><input id="pu-notes" placeholder="رقم فاتورة المورد الأصلية، تفاصيل الشحنة..."></div>
       <div id="purchase-cart-total" style="font-size:16px;font-weight:700;margin:10px 0"></div>
@@ -212,7 +212,7 @@ function addToPurchaseCart(productId, name, cost) {
 async function addCustomPurchaseItem() {
   const name = await showPromptModal('اسم الصنف المخصص:');
   if (!name) return;
-  const costStr = await showPromptModal('سعر التكلفة للوحدة:', '0');
+  const costStr = await showPromptModal('سعر التكلفة للوحدة:', '0', { money: true });
   const cost = parseFloat(costStr) || 0;
   PURCHASE_CART.push({ product_id: null, description: name, qty: 1, unit_cost: cost });
   renderPurchaseCartTable();
@@ -223,7 +223,7 @@ function updatePurchaseCartQty(idx, qty) {
   renderPurchaseCartTable();
 }
 function updatePurchaseCartCost(idx, cost) {
-  PURCHASE_CART[idx].unit_cost = Math.max(0, parseFloat(cost) || 0);
+  PURCHASE_CART[idx].unit_cost = Math.max(0, unformatNumber(cost));
   renderPurchaseCartTable();
 }
 function removePurchaseCartItem(idx) {
@@ -244,7 +244,7 @@ function renderPurchaseCartTable() {
             <tr>
               <td>${c.description}</td>
               <td><input type="number" value="${c.qty}" style="width:60px" onchange="updatePurchaseCartQty(${idx}, this.value)"></td>
-              <td><input type="number" step="0.01" value="${c.unit_cost}" style="width:90px" onchange="updatePurchaseCartCost(${idx}, this.value)"></td>
+              <td><input inputmode="decimal" value="${fmtNum(c.unit_cost)}" style="width:90px" oninput="formatNumberInput(this)" onchange="updatePurchaseCartCost(${idx}, this.value)"></td>
               <td>${(c.qty * c.unit_cost).toFixed(2)}</td>
               <td><button class="btn small danger" onclick="removePurchaseCartItem(${idx})">×</button></td>
             </tr>
@@ -255,7 +255,7 @@ function renderPurchaseCartTable() {
     `;
   }
   const subtotal = PURCHASE_CART.reduce((s, c) => s + c.qty * c.unit_cost, 0);
-  const discount = parseFloat(document.getElementById('pu-discount')?.value) || 0;
+  const discount = unformatNumber(document.getElementById('pu-discount')?.value);
   const total = Math.max(0, subtotal - discount);
   document.getElementById('purchase-cart-total').textContent = `الإجمالي: ${total.toLocaleString('ar')} د.ع`;
 }
@@ -268,8 +268,8 @@ async function submitPurchase() {
     supplier_id: parseInt(supplierId),
     employee_id: CURRENT_USER.id,
     items: PURCHASE_CART,
-    discount: parseFloat(document.getElementById('pu-discount').value) || 0,
-    paid_amount: parseFloat(document.getElementById('pu-paid').value) || 0,
+    discount: unformatNumber(document.getElementById('pu-discount').value),
+    paid_amount: unformatNumber(document.getElementById('pu-paid').value),
     notes: document.getElementById('pu-notes').value,
   };
   try {

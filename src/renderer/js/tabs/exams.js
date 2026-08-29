@@ -19,10 +19,22 @@ function generateDiopterOptions(min, max, step, selected) {
   }
   return opts;
 }
+// قوائم اقتراحات (datalist) للإدخال اليدوي — تسمح بكتابة أي قيمة مباشرة مع اقتراحات سريعة اختيارية
+function generateDiopterDatalist(min, max, step) {
+  const count = Math.round((max - min) / step);
+  let opts = '';
+  for (let i = 0; i <= count; i++) {
+    const val = Math.round((min + i * step) * 100) / 100;
+    opts += `<option value="${formatDiopter(val)}">`;
+  }
+  return opts;
+}
 // SPH: من أقوى قصر نظر (-20.00) إلى أقوى بعد نظر (+20.00)
 function sphOptions(selected) { return generateDiopterOptions(-20, 20, 0.25, selected); }
 // CYL: من أقوى استجماتيزم سالب (-10.00) إلى أقوى استجماتيزم موجب (+10.00)
 function cylOptions(selected) { return generateDiopterOptions(-10, 10, 0.25, selected); }
+function sphDatalist() { return generateDiopterDatalist(-20, 20, 0.25); }
+function cylDatalist() { return generateDiopterDatalist(-10, 10, 0.25); }
 
 // حدة الإبصار (Visual Acuity) بمقياس Snellen القياسي — من الأضعف إلى الأقوى
 const VA_VALUES = ['NPL (لا يوجد إدراك للضوء)', 'PL (إدراك للضوء فقط)', 'HM (حركة اليد)', 'CF (عدّ الأصابع)', '3/60', '6/60', '6/36', '6/24', '6/18', '6/12', '6/9', '6/6'];
@@ -32,6 +44,9 @@ function vaOptions(selected) {
     opts += `<option value="${v}" ${selected === v ? 'selected' : ''}>${v}</option>`;
   });
   return opts;
+}
+function vaDatalist() {
+  return VA_VALUES.map(v => `<option value="${v}">`).join('');
 }
 
 async function renderExamsTab(container) {
@@ -103,8 +118,12 @@ async function loadExams() {
 
 async function deleteExam(id) {
   if (!(await showConfirmModal('حذف هذا الفحص؟'))) return;
-  await API.del(`/api/exams/${id}`);
-  loadExams();
+  try {
+    await API.del(`/api/exams/${id}`);
+    loadExams();
+  } catch (err) {
+    showAlertModal('تعذر حذف الفحص: ' + err.message);
+  }
 }
 
 function viewExamById(id) {
@@ -185,35 +204,38 @@ async function openExamModal() {
         </div>
       </div>
 
-      <div class="hint" style="margin-bottom:8px">👁️ حدة الإبصار: سجّل قراءة المريض بدون تصحيح (قبل الفحص)، ثم قراءته مع النظارة/التصحيح الموصوف (بعد الفحص) — بمقياس Snellen القياسي.</div>
+      <div class="hint" style="margin-bottom:8px">👁️ حدة الإبصار: سجّل قراءة المريض بدون تصحيح (قبل الفحص)، ثم قراءته مع النظارة/التصحيح الموصوف (بعد الفحص) — بمقياس Snellen القياسي. الحقول اختيارية وتُكتب يدويًا (مع اقتراحات سريعة عند الكتابة).</div>
+      <datalist id="va-suggestions">${vaDatalist()}</datalist>
       <table class="eye-table" style="margin-bottom:12px">
         <thead><tr><th>العين</th><th>قبل الفحص (بدون تصحيح)</th><th>بعد الفحص (مع النظارة)</th></tr></thead>
         <tbody>
           <tr><td>اليمنى (OD)</td>
-            <td><select id="x-od-va-before">${vaOptions()}</select></td>
-            <td><select id="x-od-va-after">${vaOptions()}</select></td>
+            <td><input id="x-od-va-before" list="va-suggestions" placeholder="مثال: 6/6"></td>
+            <td><input id="x-od-va-after" list="va-suggestions" placeholder="مثال: 6/6"></td>
           </tr>
           <tr><td>اليسرى (OS)</td>
-            <td><select id="x-os-va-before">${vaOptions()}</select></td>
-            <td><select id="x-os-va-after">${vaOptions()}</select></td>
+            <td><input id="x-os-va-before" list="va-suggestions" placeholder="مثال: 6/6"></td>
+            <td><input id="x-os-va-after" list="va-suggestions" placeholder="مثال: 6/6"></td>
           </tr>
         </tbody>
       </table>
 
-      <div class="hint" style="margin-bottom:8px">اختر قوة العدسة (SPH) والاستجماتيزم (CYL) من القوائم مباشرة — من الأقوى سالب (قصر نظر) إلى الأقوى موجب (بعد نظر)، بدون كتابة يدوية.</div>
+      <div class="hint" style="margin-bottom:8px">اكتب قوة العدسة (SPH) والاستجماتيزم (CYL) يدويًا (اختيارية) — تظهر لك اقتراحات سريعة أثناء الكتابة، أو اترك الحقل فارغًا.</div>
+      <datalist id="sph-suggestions">${sphDatalist()}</datalist>
+      <datalist id="cyl-suggestions">${cylDatalist()}</datalist>
       <table class="eye-table" style="margin-bottom:12px">
         <thead><tr><th>العين</th><th>SPH</th><th>CYL</th><th>AXIS (0-180)</th><th>PD (مم)</th><th>ADD (قراءة)</th></tr></thead>
         <tbody>
           <tr><td>اليمنى (OD)</td>
-            <td><select id="x-od-sph">${sphOptions()}</select></td>
-            <td><select id="x-od-cyl">${cylOptions()}</select></td>
+            <td><input id="x-od-sph" list="sph-suggestions" placeholder="مثال: -2.25"></td>
+            <td><input id="x-od-cyl" list="cyl-suggestions" placeholder="مثال: -0.75"></td>
             <td><input id="x-od-axis" type="number" min="0" max="180" placeholder="0-180"></td>
             <td><input id="x-od-pd" type="number" step="0.5" placeholder="مم"></td>
             <td><input id="x-od-add" placeholder="مثال: +1.50"></td>
           </tr>
           <tr><td>اليسرى (OS)</td>
-            <td><select id="x-os-sph">${sphOptions()}</select></td>
-            <td><select id="x-os-cyl">${cylOptions()}</select></td>
+            <td><input id="x-os-sph" list="sph-suggestions" placeholder="مثال: -2.25"></td>
+            <td><input id="x-os-cyl" list="cyl-suggestions" placeholder="مثال: -0.75"></td>
             <td><input id="x-os-axis" type="number" min="0" max="180" placeholder="0-180"></td>
             <td><input id="x-os-pd" type="number" step="0.5" placeholder="مم"></td>
             <td><input id="x-os-add" placeholder="مثال: +1.50"></td>

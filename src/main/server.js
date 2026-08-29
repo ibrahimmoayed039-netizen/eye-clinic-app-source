@@ -719,11 +719,11 @@ function startServer(port, onReady) {
 
     let allEntries = [];
     invoices.forEach(inv => {
-      allEntries.push({ date: inv.invoice_date, description: `فاتورة رقم ${inv.invoice_number}`, debit: inv.total, credit: 0 });
+      allEntries.push({ date: inv.invoice_date, description: `فاتورة رقم ${inv.invoice_number}`, debit: inv.total, credit: 0, invoice_id: inv.id });
     });
     payments.forEach(p => {
       const inv = invoiceMap[p.invoice_id];
-      allEntries.push({ date: p.payment_date, description: `دفعة على فاتورة ${inv ? inv.invoice_number : ''}`, debit: 0, credit: p.amount });
+      allEntries.push({ date: p.payment_date, description: `دفعة على فاتورة ${inv ? inv.invoice_number : ''}`, debit: 0, credit: p.amount, invoice_id: p.invoice_id });
     });
     allEntries.sort((a, b) => new Date(a.date) - new Date(b.date));
 
