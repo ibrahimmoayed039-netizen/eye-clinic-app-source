@@ -83,19 +83,19 @@ function startServer(port, onReady) {
     res.json(patient);
   });
   app.post('/api/patients', (req, res) => {
-    const { full_name, phone, gender, birth_date, address, notes } = req.body;
+    const { full_name, phone, gender, age, address, notes } = req.body;
     if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'اسم المريض مطلوب' });
-    const info = getDb().prepare('INSERT INTO patients (full_name, phone, gender, birth_date, address, notes) VALUES (?,?,?,?,?,?)')
-      .run(full_name.trim(), phone, gender, birth_date, address, notes);
+    const info = getDb().prepare('INSERT INTO patients (full_name, phone, gender, age, address, notes) VALUES (?,?,?,?,?,?)')
+      .run(full_name.trim(), phone, gender, age || null, address, notes);
     broadcast('patients'); res.json({ id: info.lastInsertRowid });
   });
   app.put('/api/patients/:id', (req, res) => {
-    const { full_name, phone, gender, birth_date, address, notes } = req.body;
+    const { full_name, phone, gender, age, address, notes } = req.body;
     if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'اسم المريض مطلوب' });
     const existing = getDb().prepare('SELECT id FROM patients WHERE id=?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'المريض غير موجود' });
-    getDb().prepare('UPDATE patients SET full_name=?, phone=?, gender=?, birth_date=?, address=?, notes=? WHERE id=?')
-      .run(full_name.trim(), phone, gender, birth_date, address, notes, req.params.id);
+    getDb().prepare('UPDATE patients SET full_name=?, phone=?, gender=?, age=?, address=?, notes=? WHERE id=?')
+      .run(full_name.trim(), phone, gender, age || null, address, notes, req.params.id);
     broadcast('patients'); res.json({ ok: true });
   });
   app.delete('/api/patients/:id', (req, res) => {

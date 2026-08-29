@@ -32,6 +32,7 @@ function initDatabase(userDataPath) {
       phone TEXT,
       gender TEXT,
       birth_date TEXT,
+      age INTEGER,
       address TEXT,
       notes TEXT,
       created_at TEXT DEFAULT (datetime('now'))
@@ -262,6 +263,12 @@ function initDatabase(userDataPath) {
   const catColumns = db.prepare("PRAGMA table_info(categories)").all().map(c => c.name);
   if (!catColumns.includes('parent_id')) {
     db.exec('ALTER TABLE categories ADD COLUMN parent_id INTEGER');
+  }
+
+  // ترحيل تلقائي: إضافة عمود العمر لجدول المرضى (استبدال تاريخ الميلاد بحقل العمر المباشر)
+  const patientColumns = db.prepare("PRAGMA table_info(patients)").all().map(c => c.name);
+  if (!patientColumns.includes('age')) {
+    db.exec('ALTER TABLE patients ADD COLUMN age INTEGER');
   }
 
   const adminExists = db.prepare('SELECT COUNT(*) c FROM employees').get();

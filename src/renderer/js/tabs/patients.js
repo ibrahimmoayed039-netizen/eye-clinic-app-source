@@ -18,7 +18,7 @@ async function loadPatients() {
   if (!rows.length) { box.innerHTML = '<div class="empty">لا يوجد مرضى بعد</div>'; return; }
   box.innerHTML = `
     <table>
-      <thead><tr><th>#</th><th>الاسم</th><th>الجوال</th><th>الجنس</th><th>تاريخ الميلاد</th><th>إجراءات</th></tr></thead>
+      <thead><tr><th>#</th><th>الاسم</th><th>الجوال</th><th>الجنس</th><th>العمر</th><th>إجراءات</th></tr></thead>
       <tbody>
         ${rows.map(p => `
           <tr>
@@ -26,7 +26,7 @@ async function loadPatients() {
             <td>${p.full_name}</td>
             <td>${p.phone || '-'}</td>
             <td>${p.gender || '-'}</td>
-            <td>${p.birth_date || '-'}</td>
+            <td>${p.age || '-'}</td>
             <td>
               <button class="btn small" onclick="openPatientModal(${p.id})">تعديل</button>
               <button class="btn small secondary" onclick="goToExamsFor(${p.id}, '${p.full_name.replace(/'/g, "")}')">الفحوصات</button>
@@ -59,7 +59,7 @@ let PATIENT_MODAL_CALLBACK = null;
 
 async function openPatientModal(id, onSavedCallback) {
   PATIENT_MODAL_CALLBACK = onSavedCallback || null;
-  let patient = { full_name: '', phone: '', gender: 'ذكر', birth_date: '', address: '', notes: '' };
+  let patient = { full_name: '', phone: '', gender: 'ذكر', age: '', address: '', notes: '' };
   if (id) patient = await API.get(`/api/patients/${id}`);
 
   const overlay = document.createElement('div');
@@ -76,7 +76,7 @@ async function openPatientModal(id, onSavedCallback) {
             <option ${patient.gender === 'أنثى' ? 'selected' : ''}>أنثى</option>
           </select>
         </div>
-        <div class="form-group"><label>تاريخ الميلاد</label><input type="date" id="f-birth" value="${patient.birth_date || ''}"></div>
+        <div class="form-group"><label>العمر</label><input type="number" min="0" max="120" id="f-age" placeholder="مثال: 35" value="${patient.age || ''}"></div>
       </div>
       <div class="form-group"><label>العنوان</label><input id="f-address" value="${patient.address || ''}"></div>
       <div class="form-group"><label>ملاحظات</label><textarea id="f-notes" rows="2">${patient.notes || ''}</textarea></div>
@@ -197,7 +197,7 @@ async function savePatient(id) {
     full_name: document.getElementById('f-name').value.trim(),
     phone: document.getElementById('f-phone').value.trim(),
     gender: document.getElementById('f-gender').value,
-    birth_date: document.getElementById('f-birth').value,
+    age: document.getElementById('f-age').value ? parseInt(document.getElementById('f-age').value, 10) : null,
     address: document.getElementById('f-address').value.trim(),
     notes: document.getElementById('f-notes').value.trim(),
   };
