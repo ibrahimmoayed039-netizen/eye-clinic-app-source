@@ -13,6 +13,7 @@ async function renderSalesTab(container, restoreData) {
   [SALES_SETTINGS_CACHE, SALES_PRODUCTS_CACHE, SALES_CATEGORIES_CACHE] = await Promise.all([
     API.get('/api/settings'), API.get('/api/products'), API.get('/api/categories')
   ]);
+  SALES_PRODUCTS_CACHE = SALES_PRODUCTS_CACHE.filter(p => p.active !== 0); // إخفاء المنتجات الموقوفة عن شاشة البيع
 
   const draft = restoreData || (CART.length ? {
     cart: CART,

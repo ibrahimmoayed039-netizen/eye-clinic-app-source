@@ -33,10 +33,10 @@ async function loadProducts() {
   if (!filtered.length) { box.innerHTML = '<div class="empty">لا توجد منتجات بعد</div>'; return; }
   box.innerHTML = `
     <table>
-      <thead><tr><th>#</th><th>الاسم</th><th>الفئة</th><th>الباركود</th><th>السعر</th><th>التكلفة</th><th>المخزون</th><th>إجراءات</th></tr></thead>
+      <thead><tr><th>#</th><th>الاسم</th><th>الفئة</th><th>الباركود</th><th>السعر</th><th>التكلفة</th><th>المخزون</th><th>الحالة</th><th>إجراءات</th></tr></thead>
       <tbody>
         ${filtered.map(p => `
-          <tr>
+          <tr style="${p.active === 0 ? 'opacity:.55' : ''}">
             <td>${p.id}</td>
             <td>${p.name}</td>
             <td>${p.category || '-'}</td>
@@ -44,6 +44,7 @@ async function loadProducts() {
             <td>${p.price.toFixed(2)}</td>
             <td>${p.cost.toFixed(2)}</td>
             <td>${p.stock_qty <= 3 ? `<span style="color:#dc2626;font-weight:600">${p.stock_qty}</span>` : p.stock_qty}</td>
+            <td>${p.active === 0 ? '⛔ موقوف' : '✅ نشط'}</td>
             <td>
               <button class="btn small" onclick="openProductModal(${p.id})">تعديل</button>
               <button class="btn small danger" onclick="deleteProduct(${p.id})">حذف</button>
@@ -58,7 +59,8 @@ async function loadProducts() {
 async function deleteProduct(id) {
   if (!(await showConfirmModal('حذف هذا المنتج؟'))) return;
   try {
-    await API.del(`/api/products/${id}`);
+    const res = await API.del(`/api/products/${id}`);
+    if (res.deactivatedInstead) showAlertModal('هذا المنتج له مبيعات/مشتريات/جرد سابق، تم إيقافه بدل حذفه للحفاظ على سلامة السجلات. لن يظهر بعد الآن بشاشات البيع والشراء.');
     loadProducts();
   } catch (err) {
     showAlertModal('تعذر حذف المنتج: ' + err.message);
@@ -174,7 +176,7 @@ async function addCategoryInline() {
 }
 
 async function openProductModal(id) {
-  let p = { name: '', category: '', barcode: '', price: 0, cost: 0, stock_qty: 0 };
+  let p = { name: '', category: '', barcode: '', price: 0, cost: 0, stock_qty: 0, active: 1 };
   if (id) p = ALL_PRODUCTS_CACHE.find(x => x.id === id) || p;
   const cats = ALL_CATEGORIES_CACHE.length ? ALL_CATEGORIES_CACHE : await API.get('/api/categories');
 
@@ -198,9 +200,15 @@ async function openProductModal(id) {
         <div class="form-group"><label>الكمية بالمخزون</label><input id="pf-stock" type="number" value="${p.stock_qty}"></div>
         <div class="form-group"><label>سعر البيع</label><input id="pf-price" inputmode="decimal" oninput="formatNumberInput(this)" value="${fmtNum(p.price)}"></div>
         <div class="form-group"><label>التكلفة</label><input id="pf-cost" inputmode="decimal" oninput="formatNumberInput(this)" value="${fmtNum(p.cost)}"></div>
+        ${id ? `<div class="form-group"><label>الحالة</label>
+          <select id="pf-active">
+            <option value="1" ${p.active !== 0 ? 'selected' : ''}>✅ نشط (يظهر بالبيع والشراء)</option>
+            <option value="0" ${p.active === 0 ? 'selected' : ''}>⛔ موقوف (مخفي عن البيع والشراء)</option>
+          </select>
+        </div>` : ''}
       </div>
       <div class="modal-actions">
-        <button class="btn secondary" onclick="this.closest('.modal-overlay').remove()">إلغاء</button>
+        <button class="btn secondary" onclick="closeTopModal()">إلغاء</button>
         <button class="btn" onclick="saveProduct(${id || 'null'})">حفظ</button>
       </div>
     </div>
@@ -217,6 +225,7 @@ async function saveProduct(id) {
     price: unformatNumber(document.getElementById('pf-price').value),
     cost: unformatNumber(document.getElementById('pf-cost').value),
   };
+  if (id) data.active = document.getElementById('pf-active').value === '1' ? 1 : 0;
   if (!data.name) { showAlertModal('الرجاء إدخال اسم المنتج'); return; }
   if (data.price < 0 || data.cost < 0 || data.stock_qty < 0) { showAlertModal('لا يمكن أن يكون السعر أو التكلفة أو الكمية بقيمة سالبة'); return; }
   try {

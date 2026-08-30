@@ -69,6 +69,7 @@ function initDatabase(userDataPath) {
       price REAL DEFAULT 0,
       cost REAL DEFAULT 0,
       stock_qty INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -269,6 +270,12 @@ function initDatabase(userDataPath) {
   const patientColumns = db.prepare("PRAGMA table_info(patients)").all().map(c => c.name);
   if (!patientColumns.includes('age')) {
     db.exec('ALTER TABLE patients ADD COLUMN age INTEGER');
+  }
+
+  // ترحيل تلقائي: إضافة عمود التفعيل للمنتجات (لدعم إيقاف المنتج بدل حذفه إذا كان مرتبطًا بفواتير سابقة)
+  const productColumns = db.prepare("PRAGMA table_info(products)").all().map(c => c.name);
+  if (!productColumns.includes('active')) {
+    db.exec('ALTER TABLE products ADD COLUMN active INTEGER DEFAULT 1');
   }
 
   const adminExists = db.prepare('SELECT COUNT(*) c FROM employees').get();
