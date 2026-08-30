@@ -183,8 +183,13 @@ function startServer(port, onReady) {
     broadcast('products'); res.json({ ok: true });
   });
   app.delete('/api/products/:id', (req, res) => {
-    getDb().prepare('DELETE FROM products WHERE id=?').run(req.params.id);
-    broadcast('products'); res.json({ ok: true });
+    try {
+      getDb().prepare('DELETE FROM products WHERE id=?').run(req.params.id);
+      broadcast('products'); res.json({ ok: true });
+    } catch (err) {
+      console.error('خطأ حذف منتج:', err);
+      res.status(500).json({ error: 'تعذر حذف المنتج: ' + err.message });
+    }
   });
 
   // ---------- الفواتير / المبيعات ----------
@@ -310,10 +315,15 @@ function startServer(port, onReady) {
     res.json(withBalance);
   });
   app.post('/api/suppliers', (req, res) => {
-    const { name, phone, address, notes } = req.body;
+    const { name, phone, address, notes, opening_balance } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'اسم المورد مطلوب' });
     const info = getDb().prepare('INSERT INTO suppliers (name, phone, address, notes) VALUES (?,?,?,?)').run(name.trim(), phone, address, notes);
-    broadcast('suppliers'); res.json({ id: info.lastInsertRowid });
+    const supplierId = info.lastInsertRowid;
+    const opening = Number(opening_balance) || 0;
+    if (opening > 0) {
+      getDb().prepare("INSERT INTO supplier_transactions (supplier_id, type, amount, description) VALUES (?, 'purchase', ?, 'رصيد افتتاحي')").run(supplierId, opening);
+    }
+    broadcast('suppliers'); res.json({ id: supplierId });
   });
   app.put('/api/suppliers/:id', (req, res) => {
     const { name, phone, address, notes } = req.body;

@@ -20,21 +20,49 @@ function generateDiopterOptions(min, max, step, selected) {
   return opts;
 }
 // قوائم اقتراحات (datalist) للإدخال اليدوي — تسمح بكتابة أي قيمة مباشرة مع اقتراحات سريعة اختيارية
-function generateDiopterDatalist(min, max, step) {
+function generateDiopterList(min, max, step) {
   const count = Math.round((max - min) / step);
-  let opts = '';
+  const list = [];
   for (let i = 0; i <= count; i++) {
     const val = Math.round((min + i * step) * 100) / 100;
-    opts += `<option value="${formatDiopter(val)}">`;
+    list.push(formatDiopter(val));
   }
-  return opts;
+  return list;
 }
 // SPH: من أقوى قصر نظر (-20.00) إلى أقوى بعد نظر (+20.00)
 function sphOptions(selected) { return generateDiopterOptions(-20, 20, 0.25, selected); }
 // CYL: من أقوى استجماتيزم سالب (-10.00) إلى أقوى استجماتيزم موجب (+10.00)
 function cylOptions(selected) { return generateDiopterOptions(-10, 10, 0.25, selected); }
-function sphDatalist() { return generateDiopterDatalist(-20, 20, 0.25); }
-function cylDatalist() { return generateDiopterDatalist(-10, 10, 0.25); }
+const SPH_VALUES = generateDiopterList(-20, 20, 0.25);
+const CYL_VALUES = generateDiopterList(-10, 10, 0.25);
+
+// قائمة اقتراحات قابلة للتمرير بالماوس (بديل عن datalist الأصلية بالمتصفح التي لا تدعم
+// التمرير بعجلة الماوس داخل Electron لما تحتوي على عدد كبير من الخيارات)
+function showDiopterSuggestions(inputEl, values) {
+  const typed = inputEl.value.trim();
+  const matches = (typed ? values.filter(v => v.includes(typed)) : values).slice(0, 8);
+  let list = inputEl._suggestBox;
+  if (!list) {
+    inputEl.parentElement.style.position = 'relative';
+    list = document.createElement('div');
+    list.style = 'position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#fff;border:1px solid #ddd;border-radius:8px;z-index:50;max-height:180px;overflow-y:auto;box-shadow:0 4px 10px rgba(0,0,0,.1)';
+    inputEl.after(list);
+    inputEl._suggestBox = list;
+  }
+  if (!matches.length) { list.remove(); inputEl._suggestBox = null; return; }
+  list.innerHTML = matches.map(v => `<div style="padding:7px 12px;cursor:pointer" onmousedown="event.preventDefault(); selectDiopterSuggestion('${inputEl.id}', '${v}')">${v}</div>`).join('');
+}
+function selectDiopterSuggestion(inputId, value) {
+  const el = document.getElementById(inputId);
+  el.value = value;
+  if (el._suggestBox) { el._suggestBox.remove(); el._suggestBox = null; }
+}
+// إغلاق قائمة الاقتراحات عند الضغط خارجها
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('input[id^="x-od-sph"], input[id^="x-os-sph"], input[id^="x-od-cyl"], input[id^="x-os-cyl"]').forEach(el => {
+    if (el !== e.target && el._suggestBox) { el._suggestBox.remove(); el._suggestBox = null; }
+  });
+});
 
 // حدة الإبصار (Visual Acuity) بمقياس Snellen القياسي — من الأضعف إلى الأقوى
 const VA_VALUES = ['NPL (لا يوجد إدراك للضوء)', 'PL (إدراك للضوء فقط)', 'HM (حركة اليد)', 'CF (عدّ الأصابع)', '3/60', '6/60', '6/36', '6/24', '6/18', '6/12', '6/9', '6/6'];
@@ -221,21 +249,19 @@ async function openExamModal() {
       </table>
 
       <div class="hint" style="margin-bottom:8px">اكتب قوة العدسة (SPH) والاستجماتيزم (CYL) يدويًا (اختيارية) — تظهر لك اقتراحات سريعة أثناء الكتابة، أو اترك الحقل فارغًا.</div>
-      <datalist id="sph-suggestions">${sphDatalist()}</datalist>
-      <datalist id="cyl-suggestions">${cylDatalist()}</datalist>
       <table class="eye-table" style="margin-bottom:12px">
         <thead><tr><th>العين</th><th>SPH</th><th>CYL</th><th>AXIS (0-180)</th><th>PD (مم)</th><th>ADD (قراءة)</th></tr></thead>
         <tbody>
           <tr><td>اليمنى (OD)</td>
-            <td><input id="x-od-sph" list="sph-suggestions" placeholder="مثال: -2.25"></td>
-            <td><input id="x-od-cyl" list="cyl-suggestions" placeholder="مثال: -0.75"></td>
+            <td><input id="x-od-sph" autocomplete="off" placeholder="مثال: -2.25" oninput="showDiopterSuggestions(this, SPH_VALUES)"></td>
+            <td><input id="x-od-cyl" autocomplete="off" placeholder="مثال: -0.75" oninput="showDiopterSuggestions(this, CYL_VALUES)"></td>
             <td><input id="x-od-axis" type="number" min="0" max="180" placeholder="0-180"></td>
             <td><input id="x-od-pd" type="number" step="0.5" placeholder="مم"></td>
             <td><input id="x-od-add" placeholder="مثال: +1.50"></td>
           </tr>
           <tr><td>اليسرى (OS)</td>
-            <td><input id="x-os-sph" list="sph-suggestions" placeholder="مثال: -2.25"></td>
-            <td><input id="x-os-cyl" list="cyl-suggestions" placeholder="مثال: -0.75"></td>
+            <td><input id="x-os-sph" autocomplete="off" placeholder="مثال: -2.25" oninput="showDiopterSuggestions(this, SPH_VALUES)"></td>
+            <td><input id="x-os-cyl" autocomplete="off" placeholder="مثال: -0.75" oninput="showDiopterSuggestions(this, CYL_VALUES)"></td>
             <td><input id="x-os-axis" type="number" min="0" max="180" placeholder="0-180"></td>
             <td><input id="x-os-pd" type="number" step="0.5" placeholder="مم"></td>
             <td><input id="x-os-add" placeholder="مثال: +1.50"></td>

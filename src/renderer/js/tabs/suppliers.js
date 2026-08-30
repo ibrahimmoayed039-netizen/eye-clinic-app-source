@@ -66,9 +66,13 @@ async function openSupplierModal(id) {
         <div class="form-group"><label>رقم الجوال</label><input id="sup-phone" value="${s.phone || ''}"></div>
       </div>
       <div class="form-group"><label>العنوان</label><input id="sup-address" value="${s.address || ''}"></div>
+      ${!id ? `
+      <div class="form-group"><label>الرصيد الافتتاحي (د.ع) — مبلغ مستحق للمورد قبل استخدام البرنامج</label>
+        <input id="sup-opening-balance" inputmode="decimal" value="0" oninput="formatNumberInput(this)" placeholder="اتركه 0 إذا لا يوجد">
+      </div>` : ''}
       <div class="form-group"><label>ملاحظات</label><textarea id="sup-notes" rows="2">${s.notes || ''}</textarea></div>
       <div class="modal-actions">
-        <button class="btn secondary" onclick="this.closest('.modal-overlay').remove()">إلغاء</button>
+        <button class="btn secondary" onclick="closeTopModal()">إلغاء</button>
         <button class="btn" onclick="saveSupplier(${id || 'null'})">حفظ</button>
       </div>
     </div>
@@ -83,6 +87,9 @@ async function saveSupplier(id) {
     address: document.getElementById('sup-address').value.trim(),
     notes: document.getElementById('sup-notes').value.trim(),
   };
+  if (!id) {
+    data.opening_balance = unformatNumber(document.getElementById('sup-opening-balance')?.value);
+  }
   if (!data.name) { showAlertModal('الرجاء إدخال اسم المورد'); return; }
   try {
     if (id) await API.put(`/api/suppliers/${id}`, data);

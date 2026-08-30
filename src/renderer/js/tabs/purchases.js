@@ -131,14 +131,14 @@ async function renderNewPurchaseForm(container) {
   SELECTED_PURCHASE_SUPPLIER = null;
 
   container.innerHTML = `
-    <div class="card" style="max-width:900px;margin:0 auto">
+    <div class="card">
       <div class="toolbar" style="justify-content:space-between">
         <h2>🛒 فاتورة شراء جديدة من مورد</h2>
         <button class="btn secondary" onclick="renderPurchasesTab(document.getElementById('content'))">◀ رجوع لسجل المشتريات</button>
       </div>
       <div class="grid-2">
         <div class="form-group"><label>المورد</label>
-          <select id="pu-supplier">
+          <select id="pu-supplier" onchange="renderPurchaseCartTable()">
             <option value="">-- اختر المورد --</option>
             ${PURCHASES_SUPPLIERS_CACHE.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
           </select>
@@ -147,24 +147,36 @@ async function renderNewPurchaseForm(container) {
           <input id="pu-barcode-scan" placeholder="📷 امسح الباركود هنا (يضاف تلقائيًا)..." style="border-color:#0f766e" onkeydown="handlePurchaseBarcodeScan(event)">
         </div>
       </div>
-      <div class="form-group"><label>المنتجات</label>
-        <div class="toolbar" style="margin-bottom:8px">
-          <input id="pu-product-search" placeholder="ابحث بالاسم..." style="flex:1" oninput="loadPurchaseProductGrid()">
-          <select id="pu-product-category" onchange="loadPurchaseProductGrid()">
-            <option value="">كل الفئات</option>
-            ${PURCHASES_CATEGORIES_CACHE.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
-          </select>
+
+      <div class="purchase-layout">
+        <div>
+          <div class="form-group"><label>المنتجات</label>
+            <div class="toolbar" style="margin-bottom:8px">
+              <input id="pu-product-search" placeholder="ابحث بالاسم..." style="flex:1" oninput="loadPurchaseProductGrid()">
+              <select id="pu-product-category" onchange="loadPurchaseProductGrid()">
+                <option value="">كل الفئات</option>
+                ${categoryOptionsHtml(PURCHASES_CATEGORIES_CACHE, '')}
+              </select>
+            </div>
+            <div id="purchase-product-grid" class="product-grid" style="max-height:420px"></div>
+          </div>
         </div>
-        <div id="purchase-product-grid" class="product-grid" style="max-height:280px"></div>
+
+        <div class="cart-panel">
+          <div class="cart-panel-header">
+            <h3>🧾 قائمة الشراء <span class="cart-count-badge" id="cart-count-badge">0</span></h3>
+            <button class="btn small secondary" onclick="addCustomPurchaseItem()">+ صنف مخصص</button>
+          </div>
+          <div id="pu-supplier-tag" style="font-size:12px;color:#0f766e;margin-bottom:10px;min-height:16px"></div>
+          <div id="purchase-cart-table"></div>
+          <div class="cart-summary-row"><span>الإجمالي الفرعي</span><span id="pu-subtotal-display">0 د.ع</span></div>
+          <div class="cart-summary-row"><span>الخصم (د.ع)</span><input id="pu-discount" inputmode="decimal" value="0" oninput="formatNumberInput(this); renderPurchaseCartTable()"></div>
+          <div class="cart-summary-total"><span>الإجمالي</span><span id="purchase-cart-total"></span></div>
+          <div class="form-group" style="margin-top:10px"><label>المبلغ المدفوع الآن</label><input id="pu-paid" inputmode="decimal" value="0" oninput="formatNumberInput(this)"></div>
+          <div class="form-group"><label>ملاحظات</label><input id="pu-notes" placeholder="رقم فاتورة المورد الأصلية، تفاصيل الشحنة..."></div>
+          <button class="btn" style="width:100%;margin-top:6px" onclick="submitPurchase()">✅ حفظ فاتورة الشراء</button>
+        </div>
       </div>
-      <div id="purchase-cart-table"></div>
-      <div class="grid-2" style="margin-top:12px">
-        <div class="form-group"><label>الخصم (د.ع)</label><input id="pu-discount" inputmode="decimal" value="0" oninput="formatNumberInput(this); renderPurchaseCartTable()"></div>
-        <div class="form-group"><label>المبلغ المدفوع الآن</label><input id="pu-paid" inputmode="decimal" value="0" oninput="formatNumberInput(this)"></div>
-      </div>
-      <div class="form-group"><label>ملاحظات</label><input id="pu-notes" placeholder="رقم فاتورة المورد الأصلية، تفاصيل الشحنة..."></div>
-      <div id="purchase-cart-total" style="font-size:16px;font-weight:700;margin:10px 0"></div>
-      <button class="btn" style="width:100%" onclick="submitPurchase()">✅ حفظ فاتورة الشراء (تحديث المخزون تلقائيًا)</button>
     </div>
   `;
   loadPurchaseProductGrid();
@@ -219,7 +231,7 @@ async function addCustomPurchaseItem() {
 }
 
 function updatePurchaseCartQty(idx, qty) {
-  PURCHASE_CART[idx].qty = Math.max(0.01, parseFloat(qty) || 1);
+  PURCHASE_CART[idx].qty = Math.max(1, parseFloat(qty) || 1);
   renderPurchaseCartTable();
 }
 function updatePurchaseCartCost(idx, cost) {
@@ -233,31 +245,51 @@ function removePurchaseCartItem(idx) {
 
 function renderPurchaseCartTable() {
   const box = document.getElementById('purchase-cart-table');
+  const countBadge = document.getElementById('cart-count-badge');
+  const itemCount = PURCHASE_CART.reduce((s, c) => s + Number(c.qty || 0), 0);
+  if (countBadge) countBadge.textContent = itemCount;
+
+  const supplierTag = document.getElementById('pu-supplier-tag');
+  if (supplierTag) {
+    const supplierId = document.getElementById('pu-supplier')?.value;
+    const supplier = PURCHASES_SUPPLIERS_CACHE.find(s => String(s.id) === String(supplierId));
+    supplierTag.textContent = supplier ? `📦 المورد: ${supplier.name}` : '';
+  }
+
   if (!PURCHASE_CART.length) {
-    box.innerHTML = '<div class="empty" style="padding:16px">أضف منتجات لفاتورة الشراء <br><button class="btn small secondary" style="margin-top:8px" onclick="addCustomPurchaseItem()">+ إضافة صنف مخصص</button></div>';
+    box.innerHTML = `
+      <div class="empty-cart-panel">
+        <span class="icon">🛍️</span>
+        قائمة الشراء فارغة<br>اختر منتجات من القائمة، أو امسح باركود، أو أضف صنفًا مخصصًا
+      </div>
+    `;
   } else {
     box.innerHTML = `
-      <table>
-        <thead><tr><th>الصنف</th><th>الكمية</th><th>سعر التكلفة</th><th>الإجمالي</th><th></th></tr></thead>
-        <tbody>
-          ${PURCHASE_CART.map((c, idx) => `
-            <tr>
-              <td>${c.description}</td>
-              <td><input type="number" value="${c.qty}" style="width:60px" onchange="updatePurchaseCartQty(${idx}, this.value)"></td>
-              <td><input inputmode="decimal" value="${fmtNum(c.unit_cost)}" style="width:90px" oninput="formatNumberInput(this)" onchange="updatePurchaseCartCost(${idx}, this.value)"></td>
-              <td>${(c.qty * c.unit_cost).toFixed(2)}</td>
-              <td><button class="btn small danger" onclick="removePurchaseCartItem(${idx})">×</button></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      <button class="btn small secondary" style="margin-top:8px" onclick="addCustomPurchaseItem()">+ صنف مخصص</button>
+      <div class="cart-list">
+        ${PURCHASE_CART.map((c, idx) => `
+          <div class="cart-row">
+            <div class="cart-row-info">
+              <div class="cart-row-name">${c.description}</div>
+              <div class="cart-row-unit">تكلفة الوحدة: <input inputmode="decimal" value="${fmtNum(c.unit_cost)}" oninput="formatNumberInput(this)" onchange="updatePurchaseCartCost(${idx}, this.value)"></div>
+            </div>
+            <div class="qty-stepper">
+              <button type="button" onclick="updatePurchaseCartQty(${idx}, ${c.qty} - 1)">−</button>
+              <input type="number" value="${c.qty}" onchange="updatePurchaseCartQty(${idx}, this.value)">
+              <button type="button" onclick="updatePurchaseCartQty(${idx}, ${c.qty} + 1)">+</button>
+            </div>
+            <div class="cart-row-total">${(c.qty * c.unit_cost).toLocaleString('ar')}</div>
+            <button class="cart-row-remove" onclick="removePurchaseCartItem(${idx})">×</button>
+          </div>
+        `).join('')}
+      </div>
     `;
   }
   const subtotal = PURCHASE_CART.reduce((s, c) => s + c.qty * c.unit_cost, 0);
   const discount = unformatNumber(document.getElementById('pu-discount')?.value);
   const total = Math.max(0, subtotal - discount);
-  document.getElementById('purchase-cart-total').textContent = `الإجمالي: ${total.toLocaleString('ar')} د.ع`;
+  const subtotalEl = document.getElementById('pu-subtotal-display');
+  if (subtotalEl) subtotalEl.textContent = `${subtotal.toLocaleString('ar')} د.ع`;
+  document.getElementById('purchase-cart-total').textContent = `${total.toLocaleString('ar')} د.ع`;
 }
 
 async function submitPurchase() {
