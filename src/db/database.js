@@ -69,7 +69,6 @@ function initDatabase(userDataPath) {
       price REAL DEFAULT 0,
       cost REAL DEFAULT 0,
       stock_qty INTEGER DEFAULT 0,
-      active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -272,16 +271,16 @@ function initDatabase(userDataPath) {
     db.exec('ALTER TABLE patients ADD COLUMN age INTEGER');
   }
 
-  // ترحيل تلقائي: إضافة عمود التفعيل للمنتجات (لدعم إيقاف المنتج بدل حذفه إذا كان مرتبطًا بفواتير سابقة)
-  const productColumns = db.prepare("PRAGMA table_info(products)").all().map(c => c.name);
-  if (!productColumns.includes('active')) {
-    db.exec('ALTER TABLE products ADD COLUMN active INTEGER DEFAULT 1');
+  // ترحيل تلقائي: إضافة عمود صلاحيات الموظف (قائمة أسماء التبويبات المسموحة، بصيغة JSON)
+  const employeeColumns = db.prepare("PRAGMA table_info(employees)").all().map(c => c.name);
+  if (!employeeColumns.includes('permissions')) {
+    db.exec('ALTER TABLE employees ADD COLUMN permissions TEXT');
   }
 
   const adminExists = db.prepare('SELECT COUNT(*) c FROM employees').get();
   if (adminExists.c === 0) {
-    db.prepare(`INSERT INTO employees (full_name, username, password, role) VALUES (?, ?, ?, ?)`)
-      .run('المدير العام', 'admin', 'admin123', 'مدير');
+    db.prepare(`INSERT INTO employees (full_name, username, password, role, permissions) VALUES (?, ?, ?, ?, ?)`)
+      .run('المدير العام', 'admin', 'admin123', 'مدير', null);
   }
 
   const catCount = db.prepare('SELECT COUNT(*) c FROM categories').get();

@@ -175,12 +175,32 @@ function showPromptModal(title, defaultValue, opts) {
 
 function buildTabs() {
   const el = document.getElementById('tabs');
-  el.innerHTML = TABS.map(t => `<button class="tab-btn" id="tabbtn-${t.id}" onclick="switchTab('${t.id}')">${t.label}</button>`).join('');
+  el.innerHTML = getAllowedTabs().map(t => `<button class="tab-btn" id="tabbtn-${t.id}" onclick="switchTab('${t.id}')">${t.label}</button>`).join('');
+}
+
+// التبويبات المسموح لهذا المستخدم برؤيتها: المدير دائمًا يرى الكل،
+// وأي موظف لم تُحدَّد له صلاحيات بعد (permissions=null، غالبًا حسابات قديمة قبل هذه الميزة) يبقى بلا قيود أيضًا
+// حفاظًا على سلوك النظام قبل الترقية.
+function getAllowedTabs() {
+  if (!CURRENT_USER) return [];
+  if (CURRENT_USER.role === 'مدير' || !CURRENT_USER.permissions) return TABS;
+  return TABS.filter(t => CURRENT_USER.permissions.includes(t.id));
 }
 
 function switchTab(id) {
+  const allowed = getAllowedTabs();
+  if (!allowed.find(t => t.id === id)) {
+    if (!allowed.length) {
+      showAlertModal('لا تملك صلاحية الوصول لأي تبويب حاليًا. الرجاء التواصل مع المدير.');
+      return;
+    }
+    id = allowed[0].id;
+  }
   activeTab = id;
-  TABS.forEach(t => document.getElementById(`tabbtn-${t.id}`).className = 'tab-btn' + (t.id === id ? ' active' : ''));
+  TABS.forEach(t => {
+    const btn = document.getElementById(`tabbtn-${t.id}`);
+    if (btn) btn.className = 'tab-btn' + (t.id === id ? ' active' : '');
+  });
   const tab = TABS.find(t => t.id === id);
   tab.render(document.getElementById('content'));
 }

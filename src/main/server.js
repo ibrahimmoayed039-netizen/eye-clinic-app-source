@@ -17,15 +17,18 @@ function startServer(port, onReady) {
 
   // ---------- الموظفين ----------
   app.get('/api/employees', (req, res) => {
-    res.json(getDb().prepare('SELECT id, full_name, username, role, phone, active, created_at FROM employees ORDER BY id DESC').all());
+    const rows = getDb().prepare('SELECT id, full_name, username, role, phone, active, permissions, created_at FROM employees ORDER BY id DESC').all();
+    rows.forEach(r => { r.permissions = r.permissions ? JSON.parse(r.permissions) : null; });
+    res.json(rows);
   });
   app.post('/api/employees', (req, res) => {
-    const { full_name, username, password, role, phone } = req.body;
+    const { full_name, username, password, role, phone, permissions } = req.body;
     if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'اسم الموظف مطلوب' });
     if (!username || !String(username).trim()) return res.status(400).json({ error: 'اسم المستخدم مطلوب' });
+    const permsJson = (role === 'مدير' || !Array.isArray(permissions)) ? null : JSON.stringify(permissions);
     try {
-      const info = getDb().prepare('INSERT INTO employees (full_name, username, password, role, phone) VALUES (?,?,?,?,?)')
-        .run(full_name.trim(), username.trim(), password || '123456', role || 'موظف', phone || '');
+      const info = getDb().prepare('INSERT INTO employees (full_name, username, password, role, phone, permissions) VALUES (?,?,?,?,?,?)')
+        .run(full_name.trim(), username.trim(), password || '123456', role || 'موظف', phone || '', permsJson);
       broadcast('employees'); res.json({ id: info.lastInsertRowid });
     } catch (err) {
       if (String(err.message).includes('UNIQUE')) return res.status(400).json({ error: 'اسم المستخدم هذا مستخدم بالفعل، اختر اسمًا آخر' });
@@ -33,10 +36,11 @@ function startServer(port, onReady) {
     }
   });
   app.put('/api/employees/:id', (req, res) => {
-    const { full_name, role, phone, active } = req.body;
+    const { full_name, role, phone, active, permissions } = req.body;
     if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'اسم الموظف مطلوب' });
-    getDb().prepare('UPDATE employees SET full_name=?, role=?, phone=?, active=? WHERE id=?')
-      .run(full_name.trim(), role, phone, active ? 1 : 0, req.params.id);
+    const permsJson = (role === 'مدير' || !Array.isArray(permissions)) ? null : JSON.stringify(permissions);
+    getDb().prepare('UPDATE employees SET full_name=?, role=?, phone=?, active=?, permissions=? WHERE id=?')
+      .run(full_name.trim(), role, phone, active ? 1 : 0, permsJson, req.params.id);
     broadcast('employees'); res.json({ ok: true });
   });
   app.delete('/api/employees/:id', (req, res) => {
@@ -62,6 +66,7 @@ function startServer(port, onReady) {
     const emp = getDb().prepare('SELECT * FROM employees WHERE username=? AND password=? AND active=1').get(username, password);
     if (!emp) return res.status(401).json({ error: 'بيانات الدخول غير صحيحة' });
     delete emp.password;
+    emp.permissions = emp.permissions ? JSON.parse(emp.permissions) : null;
     res.json(emp);
   });
 
@@ -175,28 +180,16 @@ function startServer(port, onReady) {
     broadcast('products'); res.json({ id: info.lastInsertRowid });
   });
   app.put('/api/products/:id', (req, res) => {
-    const { name, category, barcode, price, cost, stock_qty, active } = req.body;
+    const { name, category, barcode, price, cost, stock_qty } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'اسم المنتج مطلوب' });
     if (Number(price) < 0 || Number(cost) < 0 || Number(stock_qty) < 0) return res.status(400).json({ error: 'لا يمكن أن يكون السعر أو التكلفة أو الكمية بقيمة سالبة' });
-    const activeVal = active === undefined ? 1 : (active ? 1 : 0);
-    getDb().prepare('UPDATE products SET name=?, category=?, barcode=?, price=?, cost=?, stock_qty=?, active=? WHERE id=?')
-      .run(name.trim(), category, barcode, price, cost, stock_qty, activeVal, req.params.id);
+    getDb().prepare('UPDATE products SET name=?, category=?, barcode=?, price=?, cost=?, stock_qty=? WHERE id=?')
+      .run(name.trim(), category, barcode, price, cost, stock_qty, req.params.id);
     broadcast('products'); res.json({ ok: true });
   });
   app.delete('/api/products/:id', (req, res) => {
-    const id = req.params.id;
     try {
-      const target = getDb().prepare('SELECT * FROM products WHERE id=?').get(id);
-      if (!target) return res.status(404).json({ error: 'المنتج غير موجود' });
-      const hasInvoiceItems = getDb().prepare('SELECT COUNT(*) c FROM invoice_items WHERE product_id=?').get(id).c;
-      const hasPurchaseItems = getDb().prepare('SELECT COUNT(*) c FROM purchase_items WHERE product_id=?').get(id).c;
-      const hasStockTakeItems = getDb().prepare('SELECT COUNT(*) c FROM stock_take_items WHERE product_id=?').get(id).c;
-      if (hasInvoiceItems > 0 || hasPurchaseItems > 0 || hasStockTakeItems > 0) {
-        getDb().prepare('UPDATE products SET active=0 WHERE id=?').run(id);
-        broadcast('products');
-        return res.json({ ok: true, deactivatedInstead: true });
-      }
-      getDb().prepare('DELETE FROM products WHERE id=?').run(id);
+      getDb().prepare('DELETE FROM products WHERE id=?').run(req.params.id);
       broadcast('products'); res.json({ ok: true });
     } catch (err) {
       console.error('خطأ حذف منتج:', err);

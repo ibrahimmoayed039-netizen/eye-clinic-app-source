@@ -127,7 +127,6 @@ async function renderNewPurchaseForm(container) {
   [PURCHASES_SUPPLIERS_CACHE, PURCHASES_PRODUCTS_CACHE, PURCHASES_CATEGORIES_CACHE] = await Promise.all([
     API.get('/api/suppliers'), API.get('/api/products'), API.get('/api/categories')
   ]);
-  PURCHASES_PRODUCTS_CACHE = PURCHASES_PRODUCTS_CACHE.filter(p => p.active !== 0); // إخفاء المنتجات الموقوفة عن شاشة الشراء
   PURCHASE_CART = [];
   SELECTED_PURCHASE_SUPPLIER = null;
 

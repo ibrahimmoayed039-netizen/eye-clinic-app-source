@@ -13,7 +13,6 @@ async function renderSalesTab(container, restoreData) {
   [SALES_SETTINGS_CACHE, SALES_PRODUCTS_CACHE, SALES_CATEGORIES_CACHE] = await Promise.all([
     API.get('/api/settings'), API.get('/api/products'), API.get('/api/categories')
   ]);
-  SALES_PRODUCTS_CACHE = SALES_PRODUCTS_CACHE.filter(p => p.active !== 0); // إخفاء المنتجات الموقوفة عن شاشة البيع
 
   const draft = restoreData || (CART.length ? {
     cart: CART,
@@ -25,11 +24,14 @@ async function renderSalesTab(container, restoreData) {
 
   container.innerHTML = `
     <div id="held-invoices-box"></div>
-    <div class="card" style="max-width:900px;margin:0 auto">
-      <h2>🧾 فاتورة جديدة</h2>
+    <div class="card">
+      <div class="toolbar" style="justify-content:space-between">
+        <h2>🧾 فاتورة بيع جديدة</h2>
+        <div class="hint">${SALES_SETTINGS_CACHE.invoice_currency === 'USD' ? '💵 دولار أمريكي ($)' : '💵 دينار عراقي (د.ع)'} — <span style="cursor:pointer;color:#0f766e;text-decoration:underline" onclick="switchTab('settings')">تغييرها من الإعدادات</span></div>
+      </div>
       <div class="grid-2">
         <div class="form-group"><label>المريض / العميل</label>
-          <div style="display:flex; gap:8px">
+          <div style="display:flex; gap:8px; position:relative">
             <input id="s-patient-search" placeholder="ابحث عن مريض..." style="flex:1" oninput="searchPatientForSale()">
             <button class="btn small secondary" onclick="openNewPatientFromSales()">+ جديد</button>
           </div>
@@ -39,40 +41,47 @@ async function renderSalesTab(container, restoreData) {
           <input id="s-barcode-scan" placeholder="📷 امسح الباركود هنا (يضاف تلقائيًا)..." style="border-color:#0f766e" onkeydown="handleBarcodeScan(event)">
         </div>
       </div>
-      <div class="form-group"><label>الأصناف</label>
-        <div id="s-category-tabs" class="category-tabs"></div>
-        <div id="s-branch-tabs" class="category-tabs branch-tabs" style="display:none"></div>
-      </div>
-      <div class="form-group"><label>المنتجات</label>
-        <div class="toolbar" style="margin-bottom:8px">
-          <input id="s-product-search" placeholder="ابحث بالاسم..." style="flex:1" oninput="loadProductGrid()">
+
+      <div class="purchase-layout">
+        <div>
+          <div class="form-group"><label>الأصناف</label>
+            <div id="s-category-tabs" class="category-tabs"></div>
+            <div id="s-branch-tabs" class="category-tabs branch-tabs" style="display:none"></div>
+          </div>
+          <div class="form-group">
+            <div class="toolbar" style="margin-bottom:8px">
+              <input id="s-product-search" placeholder="ابحث بالاسم..." style="flex:1" oninput="loadProductGrid()">
+            </div>
+            <div id="product-grid" class="product-grid" style="max-height:460px"></div>
+          </div>
         </div>
-        <div id="product-grid" class="product-grid" style="max-height:340px"></div>
-      </div>
-      <div id="cart-table"></div>
-      <div class="grid-3" style="margin-top:12px">
-        <div class="form-group"><label>الخصم (د.ع)</label><input id="s-discount" inputmode="decimal" value="${fmtNum(draft ? (draft.discount || 0) : 0)}" oninput="formatNumberInput(this); renderCartTable(); SALES_DRAFT_DISCOUNT=unformatNumber(this.value)"></div>
-        <div class="form-group"><label>طريقة الدفع</label>
-          <select id="s-payment" onchange="SALES_DRAFT_PAYMENT=this.value">
-            <option ${draft && draft.payment==='نقدي' ? 'selected':''}>نقدي</option>
-            <option ${draft && draft.payment==='بطاقة' ? 'selected':''}>بطاقة</option>
-            <option ${draft && draft.payment==='تحويل بنكي' ? 'selected':''}>تحويل بنكي</option>
-          </select>
+
+        <div class="cart-panel">
+          <div class="cart-panel-header">
+            <h3>🛒 سلة البيع <span class="cart-count-badge" id="cart-count-badge">0</span></h3>
+            <button class="btn small secondary" onclick="addCustomItem()">+ عنصر مخصص</button>
+          </div>
+          <div id="cart-table"></div>
+
+          <div class="cart-summary-row"><span>المجموع الفرعي</span><span id="s-subtotal-display">0 د.ع</span></div>
+          <div class="cart-summary-row"><span>الخصم (د.ع)</span><input id="s-discount" inputmode="decimal" value="${fmtNum(draft ? (draft.discount || 0) : 0)}" oninput="formatNumberInput(this); renderCartTable(); SALES_DRAFT_DISCOUNT=unformatNumber(this.value)"></div>
+          <div class="cart-summary-total"><span>الإجمالي</span><span id="cart-total"></span></div>
+
+          <div class="form-group" style="margin-top:12px"><label>طريقة الدفع</label>
+            <select id="s-payment" onchange="SALES_DRAFT_PAYMENT=this.value">
+              <option ${draft && draft.payment==='نقدي' ? 'selected':''}>نقدي</option>
+              <option ${draft && draft.payment==='بطاقة' ? 'selected':''}>بطاقة</option>
+              <option ${draft && draft.payment==='تحويل بنكي' ? 'selected':''}>تحويل بنكي</option>
+            </select>
+          </div>
+          <div class="form-group"><label>المبلغ المدفوع</label><input id="s-paid" inputmode="decimal" value="0" oninput="formatNumberInput(this); SALES_UNDERPAY_ACK=false"></div>
+          <div class="form-group"><label>ملاحظات</label><input id="s-notes" value="${draft ? (draft.notes || '') : ''}" oninput="SALES_DRAFT_NOTES=this.value"></div>
+
+          <button class="btn" style="width:100%;margin-top:6px" onclick="submitInvoice()">✅ إتمام البيع وطباعة الفاتورة</button>
+          <button class="btn secondary" style="width:100%;margin-top:8px" onclick="holdCurrentInvoice()">⏸️ تعليق الفاتورة</button>
+          <p style="text-align:center;margin-top:14px"><span style="cursor:pointer;color:#0f766e;text-decoration:underline;font-size:12px" onclick="switchTab('reports')">📋 سجل كل الفواتير من تبويب التقارير</span></p>
         </div>
-        <div class="form-group"><label>عملة الفاتورة الحالية</label>
-          <div class="hint" style="margin-top:9px">${SALES_SETTINGS_CACHE.invoice_currency === 'USD' ? 'دولار أمريكي ($)' : 'دينار عراقي (د.ع)'} — <span style="cursor:pointer;color:#0f766e;text-decoration:underline" onclick="switchTab('settings')">تغييرها من الإعدادات</span></div>
-        </div>
       </div>
-      <div class="grid-2">
-        <div class="form-group"><label>المبلغ المدفوع</label><input id="s-paid" inputmode="decimal" value="0" oninput="formatNumberInput(this); SALES_UNDERPAY_ACK=false"></div>
-        <div class="form-group"><label>ملاحظات</label><input id="s-notes" value="${draft ? (draft.notes || '') : ''}" oninput="SALES_DRAFT_NOTES=this.value"></div>
-      </div>
-      <div id="cart-total" style="font-size:16px;font-weight:700;margin:10px 0"></div>
-      <div style="display:flex; gap:8px">
-        <button class="btn" style="flex:1" onclick="submitInvoice()">✅ إتمام البيع وطباعة الفاتورة</button>
-        <button class="btn secondary" onclick="holdCurrentInvoice()">⏸️ تعليق</button>
-      </div>
-      <p style="text-align:center;margin-top:14px"><span style="cursor:pointer;color:#0f766e;text-decoration:underline;font-size:13px" onclick="switchTab('reports')">📋 عرض سجل كل الفواتير من تبويب التقارير</span></p>
     </div>
   `;
 
@@ -260,25 +269,38 @@ function removeCartItem(idx) {
 function renderCartTable() {
   SALES_UNDERPAY_ACK = false; // أي تغيير بالسلة أو الخصم يلغي أي تأكيد سابق على الدفع الناقص
   const box = document.getElementById('cart-table');
+  if (!box) return;
+
+  const countBadge = document.getElementById('cart-count-badge');
+  const itemCount = CART.reduce((s, c) => s + Number(c.qty || 0), 0);
+  if (countBadge) countBadge.textContent = itemCount;
+
   if (!CART.length) {
-    box.innerHTML = '<div class="empty" style="padding:16px">أضف منتجات للفاتورة <br><button class="btn small secondary" style="margin-top:8px" onclick="addCustomItem()">+ إضافة عنصر مخصص</button></div>';
+    box.innerHTML = `
+      <div class="empty-cart-panel">
+        <span class="icon">🛍️</span>
+        السلة فارغة<br>اختر منتجات من القائمة، أو امسح باركود، أو أضف عنصرًا مخصصًا
+      </div>
+    `;
   } else {
     box.innerHTML = `
-      <table>
-        <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th><th></th></tr></thead>
-        <tbody>
-          ${CART.map((c, idx) => `
-            <tr>
-              <td>${c.description}</td>
-              <td><input type="number" value="${c.qty}" style="width:60px" onchange="updateCartQty(${idx}, this.value)"></td>
-              <td>${c.unit_price.toFixed(2)}</td>
-              <td>${(c.qty * c.unit_price).toFixed(2)}</td>
-              <td><button class="btn small danger" onclick="removeCartItem(${idx})">×</button></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-      <button class="btn small secondary" style="margin-top:8px" onclick="addCustomItem()">+ عنصر مخصص</button>
+      <div class="cart-list">
+        ${CART.map((c, idx) => `
+          <div class="cart-row">
+            <div class="cart-row-info">
+              <div class="cart-row-name">${c.description}</div>
+              <div class="cart-row-unit">${c.unit_price.toLocaleString('ar')} د.ع / وحدة</div>
+            </div>
+            <div class="qty-stepper">
+              <button type="button" onclick="updateCartQty(${idx}, ${c.qty} - 1)">−</button>
+              <input type="number" value="${c.qty}" onchange="updateCartQty(${idx}, this.value)">
+              <button type="button" onclick="updateCartQty(${idx}, ${c.qty} + 1)">+</button>
+            </div>
+            <div class="cart-row-total">${(c.qty * c.unit_price).toLocaleString('ar')}</div>
+            <button class="cart-row-remove" onclick="removeCartItem(${idx})">×</button>
+          </div>
+        `).join('')}
+      </div>
     `;
   }
   const subtotal = CART.reduce((s, c) => s + c.qty * c.unit_price, 0);
@@ -286,10 +308,17 @@ function renderCartTable() {
   const total = Math.max(0, subtotal - discount);
   const currency = SALES_SETTINGS_CACHE.invoice_currency || 'IQD';
   const rate = parseFloat(SALES_SETTINGS_CACHE.exchange_rate) || 1310;
-  if (currency === 'USD') {
-    document.getElementById('cart-total').textContent = `الإجمالي: ${(total / rate).toFixed(2)} $ (يعادل ${total.toLocaleString('ar')} د.ع)`;
-  } else {
-    document.getElementById('cart-total').textContent = `الإجمالي: ${total.toLocaleString('ar')} د.ع`;
+
+  const subtotalEl = document.getElementById('s-subtotal-display');
+  if (subtotalEl) subtotalEl.textContent = `${subtotal.toLocaleString('ar')} د.ع`;
+
+  const totalEl = document.getElementById('cart-total');
+  if (totalEl) {
+    if (currency === 'USD') {
+      totalEl.textContent = `${(total / rate).toFixed(2)} $ (${total.toLocaleString('ar')} د.ع)`;
+    } else {
+      totalEl.textContent = `${total.toLocaleString('ar')} د.ع`;
+    }
   }
 }
 
@@ -407,17 +436,22 @@ function renderHeldInvoicesBox() {
   if (!box) return;
   if (!held.length) { box.innerHTML = ''; return; }
   box.innerHTML = `
-    <div class="card" style="background:#fffbeb;border:1px solid #fde68a">
-      <h2>⏸️ فواتير معلّقة (${held.length})</h2>
-      ${held.map(h => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #fde68a">
-          <div><b>${h.label}</b> <span class="hint">(${h.time} — ${h.cart.length} عنصر)</span></div>
-          <div>
-            <button class="btn small" onclick="resumeHeldInvoice(${h.id})">▶️ استئناف</button>
-            <button class="btn small danger" onclick="deleteHeldInvoice(${h.id})">حذف</button>
+    <div class="held-invoices-bar">
+      <div class="held-invoices-title">⏸️ فواتير معلّقة <span class="cart-count-badge" style="background:#b45309">${held.length}</span></div>
+      <div class="held-invoices-chips">
+        ${held.map(h => `
+          <div class="held-chip">
+            <div class="held-chip-info">
+              <b>${h.label}</b>
+              <span class="hint">${h.time} — ${h.cart.length} عنصر</span>
+            </div>
+            <div class="held-chip-actions">
+              <button class="btn small" onclick="resumeHeldInvoice(${h.id})">▶️ استئناف</button>
+              <button class="btn small danger" onclick="deleteHeldInvoice(${h.id})">حذف</button>
+            </div>
           </div>
-        </div>
-      `).join('')}
+        `).join('')}
+      </div>
     </div>
   `;
 }
