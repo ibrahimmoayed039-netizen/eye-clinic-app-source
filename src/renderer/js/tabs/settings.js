@@ -169,6 +169,15 @@ async function renderSettingsTab(container) {
       ${local.mode === 'server' ? `<p style="font-size:13px">المنفذ: <b>${local.port}</b> — شارك عنوان IP الخاص بجهازك مع باقي الأجهزة (أو عنوان Radmin VPN) ليتصلوا بالمنفذ نفسه.</p>` : `<p style="font-size:13px">متصل بالخادم: <b>${local.serverAddress}</b></p>`}
       <button class="btn danger" onclick="resetNetworkMode()">إعادة ضبط وضع الجهاز (خادم/عميل)</button>
     </div>
+
+    <div class="card">
+      <h2>ℹ️ حول البرنامج</h2>
+      <p style="font-size:13px;line-height:1.9">
+        تم تصميم هذا البرنامج بواسطة <b>المهندس إبراهيم مؤيد عطارباشي</b><br>
+        📞 رقم الهاتف: <span dir="ltr" style="font-family:monospace">+964 773 697 0504</span><br>
+        📍 الموقع: الموصل — مجموعة الثقافة — شركة المسار الذهبي
+      </p>
+    </div>
   `;
   renderPrinterDiscoveryBox();
   renderBackupCard();
