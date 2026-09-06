@@ -8,7 +8,7 @@ const { getDb } = require('../db/database');
 function startServer(port, onReady) {
   const app = express();
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '15mb' }));
   app.use(express.static(path.join(__dirname, '..', 'renderer')));
 
   const server = http.createServer(app);

@@ -13,6 +13,7 @@ const TABS = [
   { id: 'reports', label: '📊 التقارير', render: renderReportsTab },
   { id: 'employees', label: '🧑‍💼 الموظفين', render: renderEmployeesTab },
   { id: 'settings', label: '⚙️ الإعدادات', render: renderSettingsTab },
+  { id: 'about', label: 'ℹ️ حول البرنامج', render: renderAboutTab },
 ];
 
 let activeTab = 'patients';
