@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('desktop', {
   saveSetup: (config) => ipcRenderer.invoke('setup:save', config),
   resetSetup: () => ipcRenderer.invoke('setup:reset'),
   getLocalMode: () => ipcRenderer.invoke('app:getLocalMode'),
+  getZoom: () => ipcRenderer.invoke('app:getZoom'),
+  setZoom: (factor) => ipcRenderer.invoke('app:setZoom', factor),
   printThermalImage: (payload) => ipcRenderer.invoke('print:thermalImage', payload),
   printThermalText: (payload) => ipcRenderer.invoke('print:thermalText', payload),
   listPrinters: () => ipcRenderer.invoke('printer:list'),

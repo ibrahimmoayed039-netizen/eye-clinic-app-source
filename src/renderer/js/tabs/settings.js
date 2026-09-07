@@ -3,7 +3,6 @@ const SETTINGS_SECTIONS = [
   { id: 'printer',       icon: '🖨️', title: 'الطابعة الحرارية',      desc: 'الاتصال، وضع الطباعة، واختبار الحروف' },
   { id: 'print-methods', icon: '🧾', title: 'طرق الطباعة',           desc: 'تفعيل وضبط طرق الطباعة عند إتمام البيع' },
   { id: 'currency',      icon: '💵', title: 'العملة الافتراضية',     desc: 'عملة الفوترة التلقائية للمبيعات الجديدة' },
-  { id: 'font',          icon: '🔠', title: 'خط الواجهة',            desc: 'حجم خط شاشات البرنامج' },
   { id: 'invoice',       icon: '🎨', title: 'تخصيص الفاتورة',        desc: 'الشعار، الألوان، النصوص، ومقاس الورق' },
   { id: 'backup',        icon: '💾', title: 'النسخ الاحتياطي',       desc: 'أخذ نسخة أو الاستعادة منها' },
   { id: 'license',       icon: '🔑', title: 'ترخيص البرنامج',        desc: 'حالة التفعيل ومفتاح الترخيص' },
@@ -37,6 +36,15 @@ async function renderSettingsTab(container) {
       </div>
 
       <div class="settings-content">
+
+        <div class="settings-zoombar">
+          <span class="settings-zoombar-label">🔠 حجم الخط والأرقام في كل البرنامج</span>
+          <button class="zoom-btn" onclick="stepZoom(-10)">A−</button>
+          <input type="range" id="st-zoom-slider" min="70" max="200" step="5" value="100" oninput="onZoomSliderInput()">
+          <div class="zoom-value" id="st-zoom-value">100%</div>
+          <button class="zoom-btn" onclick="stepZoom(10)">A+</button>
+          <button class="zoom-reset-btn" onclick="resetZoom()" title="استعادة الحجم الافتراضي">↺</button>
+        </div>
 
         <div class="settings-section" data-section="clinic">
           <div class="settings-section-head"><h2>🏥 بيانات العيادة</h2><p>تظهر هذه المعلومات في رأس كل فاتورة مطبوعة</p></div>
@@ -135,22 +143,6 @@ async function renderSettingsTab(container) {
           </div>
         </div>
 
-        <div class="settings-section" data-section="font" style="display:none">
-          <div class="settings-section-head"><h2>🔠 حجم خط واجهة البرنامج</h2><p>يكبّر أو يصغّر خط كل شاشات البرنامج (غير خط الفاتورة المطبوعة)</p></div>
-          <div class="card">
-            <div class="form-group" style="max-width:320px">
-              <label>حجم الخط</label>
-              <select id="st-ui-fontsize" onchange="previewUiFontSize()">
-                <option value="small" ${settings.ui_font_size==='small'?'selected':''}>صغير</option>
-                <option value="medium" ${(!settings.ui_font_size || settings.ui_font_size==='medium')?'selected':''}>متوسط (افتراضي)</option>
-                <option value="large" ${settings.ui_font_size==='large'?'selected':''}>كبير</option>
-                <option value="xlarge" ${settings.ui_font_size==='xlarge'?'selected':''}>كبير جدًا</option>
-              </select>
-            </div>
-            <button class="btn" onclick="saveUiFontSizeSettings()">حفظ حجم الخط</button>
-          </div>
-        </div>
-
         <div class="settings-section" data-section="invoice" style="display:none">
           <div class="settings-section-head"><h2>🎨 تخصيص شكل الفاتورة (الطباعة العادية)</h2><p>الشعار، الألوان، النصوص، ومقاس الورق</p></div>
           <div class="card">
@@ -227,6 +219,7 @@ async function renderSettingsTab(container) {
   renderPrinterDiscoveryBox();
   renderBackupCard();
   renderLicenseCard();
+  initZoomControl();
 }
 
 async function renderLicenseCard() {
@@ -468,15 +461,44 @@ async function saveDefaultCurrencySettings() {
   showAlertModal('تم حفظ العملة الافتراضية للفواتير');
 }
 
-function previewUiFontSize() {
-  applyUiFontSizeClass(document.getElementById('st-ui-fontsize').value);
+// ---------- تكبير/تصغير حجم الخط والأرقام (يعتمد على تقنية التقريب الأصلية بالمتصفح
+// فيشمل كل عناصر الواجهة دون استثناء: نصوص، أرقام، أزرار، جداول) ----------
+async function initZoomControl() {
+  const slider = document.getElementById('st-zoom-slider');
+  if (!slider) return;
+  let current = 1;
+  try { current = (await window.desktop.getZoom()) || 1; } catch (e) { /* غير متاح */ }
+  const pct = Math.round(current * 100);
+  slider.value = pct;
+  updateZoomLabel(pct);
 }
 
-async function saveUiFontSizeSettings() {
-  const val = document.getElementById('st-ui-fontsize').value;
-  await API.post('/api/settings', { ui_font_size: val });
-  applyUiFontSizeClass(val);
-  showAlertModal('تم حفظ حجم خط الواجهة');
+function updateZoomLabel(pct) {
+  const label = document.getElementById('st-zoom-value');
+  if (label) label.textContent = pct + '%';
+}
+
+async function applyZoomPercent(pct) {
+  pct = Math.min(200, Math.max(70, pct));
+  updateZoomLabel(pct);
+  const slider = document.getElementById('st-zoom-slider');
+  if (slider) slider.value = pct;
+  try { await window.desktop.setZoom(pct / 100); } catch (e) { /* غير متاح */ }
+}
+
+function onZoomSliderInput() {
+  const pct = Number(document.getElementById('st-zoom-slider').value);
+  applyZoomPercent(pct);
+}
+
+function stepZoom(delta) {
+  const slider = document.getElementById('st-zoom-slider');
+  const current = slider ? Number(slider.value) : 100;
+  applyZoomPercent(current + delta);
+}
+
+function resetZoom() {
+  applyZoomPercent(100);
 }
 
 let PENDING_LOGO_DATAURL = null;

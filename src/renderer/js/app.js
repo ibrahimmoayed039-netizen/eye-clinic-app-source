@@ -47,12 +47,6 @@ function startApp() {
   document.getElementById('conn-status').textContent = `متصل بـ: ${API.base}`;
   buildTabs();
   switchTab(activeTab);
-  API.get('/api/settings').then(s => applyUiFontSizeClass(s.ui_font_size || 'medium')).catch(() => {});
-}
-
-function applyUiFontSizeClass(size) {
-  document.body.classList.remove('ui-font-small', 'ui-font-medium', 'ui-font-large', 'ui-font-xlarge');
-  document.body.classList.add('ui-font-' + (size || 'medium'));
 }
 
 // إغلاق أعلى نافذة منبثقة مفتوحة حاليًا (الأحدث فتحًا) — مهم عند وجود نافذة فوق نافذة

@@ -17,7 +17,14 @@ const { printThermalImageBuffer, printImageToWindowsPrinter, printCodePageTest, 
 const LICENSE_SECRET = 'NHk6rbUAbBXSafpzWyZgioOAglOH9B';
 const TRIAL_DAYS = 3;
 
-function getDeviceId() {
+// رمز الجهاز يُحسب أصلًا من عنوان MAC لأول كرت شبكة نشط. المشكلة: بعض الأجهزة
+// تغيّر عنوان MAC تلقائيًا (خاصية "عنوان عشوائي" في واي فاي على ويندوز 10/11)،
+// أو يتغيّر ترتيب اكتشاف الكروت عند استخدام شبكات افتراضية مثل Radmin VPN،
+// ما يجعل رمز الجهاز يتغيّر بين تشغيلة وأخرى فيُبطل مفتاح التفعيل بعد أيام قليلة
+// (يعود حينها البرنامج لحساب الفترة التجريبية الأصلية بالخطأ). الحل: نحسب الرمز
+// من الجهاز مرة واحدة فقط، ثم نثبّته بشكل دائم في ملف مخفي + electron-store
+// ونعيد استخدام نفس القيمة المحفوظة في كل مرة بعدها مهما تغيّر عتاد الشبكة لاحقًا.
+function computeHardwareDeviceId() {
   const nets = os.networkInterfaces();
   let mac = '';
   for (const name of Object.keys(nets)) {
@@ -28,6 +35,48 @@ function getDeviceId() {
   }
   const raw = `${os.hostname()}|${mac}|${os.platform()}|${os.arch()}`;
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16).toUpperCase();
+}
+
+function getDeviceIdMarkerPath() {
+  return path.join(app.getPath('userData'), '.devid');
+}
+
+function readPersistedDeviceId() {
+  // مصدر أول: ملف مخفي منفصل عن إعدادات electron-store
+  try {
+    const raw = fs.readFileSync(getDeviceIdMarkerPath(), 'utf8');
+    const data = JSON.parse(raw);
+    if (data && data.id && data.sig === signValue('devid|' + data.id)) return data.id;
+  } catch (e) { /* لا يوجد بعد */ }
+  return null;
+}
+
+function writePersistedDeviceId(id) {
+  try {
+    const p = getDeviceIdMarkerPath();
+    fs.writeFileSync(p, JSON.stringify({ id, sig: signValue('devid|' + id) }));
+    if (process.platform === 'win32') execFile('attrib', ['+h', p], () => {});
+  } catch (e) { /* تجاهل */ }
+}
+
+function getDeviceId(store) {
+  // 1) القيمة المثبّتة سابقًا في ملف الجهاز المخفي
+  const fromFile = readPersistedDeviceId();
+  if (fromFile) {
+    if (store && store.get('device.id') !== fromFile) store.set('device.id', fromFile);
+    return fromFile;
+  }
+  // 2) القيمة المثبّتة سابقًا في electron-store (نسخة احتياطية إن حُذف الملف المخفي)
+  const fromStore = store ? store.get('device.id') : null;
+  if (fromStore) {
+    writePersistedDeviceId(fromStore);
+    return fromStore;
+  }
+  // 3) أول مرة فعلًا على هذا الجهاز: نحسب من العتاد، ثم نثبّتها بشكل دائم
+  const computed = computeHardwareDeviceId();
+  writePersistedDeviceId(computed);
+  if (store) store.set('device.id', computed);
+  return computed;
 }
 
 function signValue(str) {
@@ -106,7 +155,7 @@ function writeMarkerFirstRun(deviceId, firstRun) {
 }
 
 function getLicenseStatus(store) {
-  const deviceId = getDeviceId();
+  const deviceId = getDeviceId(store);
   const savedKey = store.get('license.key');
   if (savedKey) {
     if (isValidPermanentKey(deviceId, savedKey)) {
@@ -242,6 +291,10 @@ function createMainWindow() {
     mainWindow.show();
     mainWindow.focus();
   });
+  mainWindow.webContents.on('did-finish-load', () => {
+    const savedZoom = store.get('zoomFactor', 1);
+    mainWindow.webContents.setZoomFactor(savedZoom);
+  });
 
   const license = getLicenseStatus(store);
   if (license.expired) {
@@ -288,7 +341,7 @@ ipcMain.handle('setup:reset', () => { store.clear(); return true; });
 ipcMain.handle('license:status', () => getLicenseStatus(store));
 
 ipcMain.handle('license:activate', (event, key) => {
-  const deviceId = getDeviceId();
+  const deviceId = getDeviceId(store);
   if (!isValidLicenseKey(deviceId, key)) {
     return { ok: false, error: 'مفتاح التفعيل غير صحيح لهذا الجهاز.' };
   }
@@ -303,6 +356,17 @@ ipcMain.handle('license:relaunch', () => {
 
 ipcMain.handle('app:getLocalMode', () => {
   return { mode: store.get('mode'), port: store.get('port'), serverAddress: store.get('serverAddress') };
+});
+
+ipcMain.handle('app:getZoom', () => {
+  return store.get('zoomFactor', 1);
+});
+
+ipcMain.handle('app:setZoom', (event, factor) => {
+  const clamped = Math.min(2, Math.max(0.7, Number(factor) || 1));
+  store.set('zoomFactor', clamped);
+  if (mainWindow) mainWindow.webContents.setZoomFactor(clamped);
+  return clamped;
 });
 
 ipcMain.handle('print:thermalImage', async (event, { receiptHtml, width, interfaceType, address }) => {
