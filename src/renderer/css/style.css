@@ -8,7 +8,6 @@ body {
   user-select: none;
 }
 input, textarea,
-table, td, th,
 .selectable, .selectable * {
   -webkit-user-select: text;
   user-select: text;
