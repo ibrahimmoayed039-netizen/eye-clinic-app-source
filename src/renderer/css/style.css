@@ -22,7 +22,6 @@ img { -webkit-user-drag: none; user-drag: none; }
 .tabs { display:flex; background:#fff; border-bottom:2px solid #e5e7eb; overflow-x:auto; }
 .tab-btn { padding:14px 20px; border:none; background:none; cursor:pointer; font-size:14px; color:#555; border-bottom:3px solid transparent; white-space:nowrap; }
 .tab-btn.active { color:#0f766e; border-bottom-color:#0f766e; font-weight:600; }
-.tab-btn:hover { background:#f9fafb; }
 
 #content { padding:20px; max-width:1400px; margin:0 auto; }
 
@@ -262,7 +261,6 @@ body.ui-font-large table, body.ui-font-xlarge table { font-size:1em; }
   padding:11px 12px; border:none; background:none; border-radius:10px; cursor:pointer;
   transition:background .15s ease;
 }
-.settings-nav-item:hover { background:#f4f6f7; }
 .settings-nav-item.active { background:#ecfdf9; }
 .settings-nav-item.active .settings-nav-title { color:#0f766e; }
 .settings-nav-icon { font-size:19px; width:26px; text-align:center; flex-shrink:0; }
