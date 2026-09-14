@@ -130,7 +130,7 @@ async function loadExams() {
             <td>${e.patient_name || '-'}</td>
             <td>${e.od_sph || '-'} / ${e.od_cyl || '-'} / ${e.od_axis || '-'}</td>
             <td>${e.os_sph || '-'} / ${e.os_cyl || '-'} / ${e.os_axis || '-'}</td>
-            <td>${e.diagnosis || '-'}</td>
+            <td>${e.diagnosis || (e.exam_image ? '📷 فحص خارجي (صورة)' : '-')}</td>
             <td>${e.employee_name || '-'}</td>
             <td>
               <button class="btn small" onclick="viewExamById(${e.id})">عرض</button>
@@ -187,6 +187,7 @@ function viewExam(e) {
       <div class="form-group"><label>ملاحظات طبية</label><div>${e.medical_notes || '-'}</div></div>
       <div class="form-group"><label>التوصيات</label><div>${e.recommendations || '-'}</div></div>
       <div class="form-group"><label>موعد المراجعة القادم</label><div>${e.next_visit_date || '-'}</div></div>
+      ${e.exam_image ? `<div class="form-group"><label>📷 صورة الفحص (فحص خارجي)</label><div><img src="${e.exam_image}" style="max-width:100%;max-height:320px;border:1px solid #ddd;border-radius:8px;cursor:pointer" onclick="showImageFullscreen(this.src)"></div></div>` : ''}
       <div class="modal-actions">
         <button class="btn secondary" onclick="this.closest('.modal-overlay').remove()">إغلاق</button>
         <button class="btn" onclick="printExamReportById(${e.id})">🖨️ طباعة</button>
@@ -212,8 +213,87 @@ async function searchPatientForExam() {
   list.innerHTML = rows.slice(0, 8).map(p => `<div style="padding:8px 12px;cursor:pointer" onmousedown="filterExamsByPatient(${p.id}, '${p.full_name.replace(/'/g, "")}'); document.getElementById('e-patient-results').remove(); document.getElementById('e-patient-search').value='${p.full_name.replace(/'/g,"")}'">${p.full_name} - ${p.phone || ''}</div>`).join('') || '<div style="padding:8px 12px;color:#999">لا نتائج</div>';
 }
 
+// ===== تصوير فحص خارجي بكاميرا الجهاز (للزبون الذي لم يعمل فحصه لدينا) =====
+let PENDING_EXAM_IMAGE = null;
+let EXAM_CAMERA_STREAM = null;
+
+function renderExamPhotoBox() {
+  const box = document.getElementById('x-photo-box');
+  if (!box) return;
+  box.innerHTML = PENDING_EXAM_IMAGE
+    ? `
+      <img src="${PENDING_EXAM_IMAGE}" style="max-height:160px;border:1px solid #ddd;border-radius:8px;display:block;margin-bottom:6px">
+      <button type="button" class="btn small secondary" onclick="openExamCameraCapture()">🔄 إعادة التصوير</button>
+      <button type="button" class="btn small danger" onclick="removeExamPhoto()">حذف الصورة</button>
+    `
+    : `<button type="button" class="btn small secondary" onclick="openExamCameraCapture()">📷 تصوير الفحص بالكاميرا</button>`;
+}
+
+function removeExamPhoto() {
+  PENDING_EXAM_IMAGE = null;
+  renderExamPhotoBox();
+}
+
+function stopExamCameraStream() {
+  if (EXAM_CAMERA_STREAM) {
+    EXAM_CAMERA_STREAM.getTracks().forEach(t => t.stop());
+    EXAM_CAMERA_STREAM = null;
+  }
+}
+
+function closeExamCameraModal() {
+  stopExamCameraStream();
+  document.getElementById('exam-camera-overlay')?.remove();
+}
+
+async function openExamCameraCapture() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'exam-camera-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="width:460px">
+      <h3>📷 تصوير الفحص</h3>
+      <p class="hint" style="margin-bottom:8px">وجّه ورقة الفحص/التحليل الخاصة بالزبون أمام الكاميرا، ثم اضغط "تصوير".</p>
+      <video id="x-camera-video" autoplay playsinline style="width:100%;border-radius:8px;background:#000"></video>
+      <canvas id="x-camera-canvas" style="display:none"></canvas>
+      <div class="modal-actions">
+        <button type="button" class="btn secondary" onclick="closeExamCameraModal()">إلغاء</button>
+        <button type="button" class="btn" id="x-camera-shot-btn" onclick="captureExamPhoto()">📸 تصوير</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  try {
+    EXAM_CAMERA_STREAM = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } }, audio: false });
+    document.getElementById('x-camera-video').srcObject = EXAM_CAMERA_STREAM;
+  } catch (err) {
+    closeExamCameraModal();
+    showAlertModal('تعذّر الوصول إلى الكاميرا: ' + err.message + '\nتأكد من توصيل كاميرا وعدم استخدامها من برنامج آخر.');
+  }
+}
+
+function captureExamPhoto() {
+  const video = document.getElementById('x-camera-video');
+  const canvas = document.getElementById('x-camera-canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  PENDING_EXAM_IMAGE = canvas.toDataURL('image/jpeg', 0.85);
+  closeExamCameraModal();
+  renderExamPhotoBox();
+}
+
+function showImageFullscreen(src) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.onclick = () => overlay.remove();
+  overlay.innerHTML = `<img src="${src}" style="max-width:92vw;max-height:92vh;border-radius:8px">`;
+  document.body.appendChild(overlay);
+}
+
 async function openExamModal() {
   const employees = await API.get('/api/employees');
+  PENDING_EXAM_IMAGE = null;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
@@ -230,6 +310,12 @@ async function openExamModal() {
         <div class="form-group"><label>الموظف الفاحص</label>
           <select id="x-employee">${employees.map(e => `<option value="${e.id}" ${CURRENT_USER && e.id===CURRENT_USER.id ? 'selected':''}>${e.full_name}</option>`).join('')}</select>
         </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:8px">
+        <label>📷 في حال الزبون لم يعمل الفحص لدينا (فحص خارجي)</label>
+        <div class="hint" style="margin-bottom:6px">صوّر ورقة الفحص/الوصفة الخاصة به بكاميرا الجهاز، بدل تعبئة الحقول أدناه.</div>
+        <div id="x-photo-box"></div>
       </div>
 
       <div class="hint" style="margin-bottom:8px">👁️ حدة الإبصار: سجّل قراءة المريض بدون تصحيح (قبل الفحص)، ثم قراءته مع النظارة/التصحيح الموصوف (بعد الفحص) — بمقياس Snellen القياسي. الحقول اختيارية وتُكتب يدويًا (مع اقتراحات سريعة عند الكتابة).</div>
@@ -290,6 +376,7 @@ async function openExamModal() {
     </div>
   `;
   document.body.appendChild(overlay);
+  renderExamPhotoBox();
 }
 
 async function searchPatientForExamModal() {
@@ -349,9 +436,11 @@ async function saveExam() {
     medical_notes: document.getElementById('x-notes').value,
     recommendations: document.getElementById('x-recommendations').value,
     next_visit_date: document.getElementById('x-next-visit').value,
+    exam_image: PENDING_EXAM_IMAGE || '',
   };
   try {
     await API.post('/api/exams', data);
+    PENDING_EXAM_IMAGE = null;
     closeTopModal();
     loadExams();
   } catch (err) {

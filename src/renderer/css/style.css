@@ -191,6 +191,31 @@ tr:hover { background:#fafafa; }
 .login-hint { font-size:11.5px; color:#9ca3af; margin-top:18px; line-height:1.8; }
 .login-hint b { color:#374151; }
 
+.login-users-list { display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto; margin-bottom:4px; padding-left:2px; }
+.login-user-btn {
+  display:flex; align-items:center; gap:12px; width:100%;
+  padding:10px 14px; border:1.5px solid #e5e7eb; border-radius:12px;
+  background:#f9fafb; cursor:pointer; text-align:right; transition:.15s; font-family:inherit;
+}
+.login-user-btn:hover { border-color:#0f766e; background:#f0fdfa; transform:translateY(-1px); }
+.login-user-avatar {
+  width:38px; height:38px; border-radius:50%; flex:none;
+  background:linear-gradient(135deg,#14b8a6,#0f766e); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:700;
+}
+.login-user-info { flex:1; text-align:right; overflow:hidden; }
+.login-user-name { display:block; font-size:14px; font-weight:600; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.login-user-role { display:block; font-size:11.5px; color:#8a93a1; }
+.login-users-empty { font-size:12.5px; color:#9ca3af; padding:16px 0; text-align:center; }
+.login-selected-user { display:flex; align-items:center; gap:10px; background:#f0fdfa; border:1px solid #99f6e4; border-radius:12px; padding:8px 12px; margin-bottom:18px; }
+.login-back-btn {
+  width:100%; padding:11px; margin-top:8px;
+  background:#fff; color:#4b5563; border:1.5px solid #e5e7eb; border-radius:11px;
+  font-size:13.5px; font-weight:600; cursor:pointer; transition:.15s;
+}
+.login-back-btn:hover { background:#f9fafb; border-color:#d1d5db; }
+
 body.ui-font-small { font-size:12px; }
 body.ui-font-medium { font-size:14px; }
 body.ui-font-large { font-size:17px; }

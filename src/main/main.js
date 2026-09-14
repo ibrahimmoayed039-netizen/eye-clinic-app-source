@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -322,6 +322,14 @@ function createMainWindow() {
     });
   }
 }
+
+// السماح بصلاحية الكاميرا (تُستخدم لتصوير فحوصات الزبائن الخارجية) دون ظهور أي موافقة نظام إضافية
+app.whenReady().then(() => {
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media') return callback(true);
+    callback(false);
+  });
+});
 
 app.whenReady().then(createMainWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

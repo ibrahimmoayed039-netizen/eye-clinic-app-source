@@ -124,17 +124,21 @@ function startServer(port, onReady) {
   });
   app.post('/api/exams', (req, res) => {
     const b = req.body;
-    const info = getDb().prepare(`INSERT INTO exams
-      (patient_id, employee_id, od_sph, od_cyl, od_axis, od_pd, od_add,
-       os_sph, os_cyl, os_axis, os_pd, os_add,
-       od_va_before, os_va_before, od_va_after, os_va_after,
-       diagnosis, medical_notes, recommendations, next_visit_date)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(b.patient_id, b.employee_id, b.od_sph, b.od_cyl, b.od_axis, b.od_pd, b.od_add,
-           b.os_sph, b.os_cyl, b.os_axis, b.os_pd, b.os_add,
-           b.od_va_before, b.os_va_before, b.od_va_after, b.os_va_after,
-           b.diagnosis, b.medical_notes, b.recommendations, b.next_visit_date);
-    broadcast('exams'); res.json({ id: info.lastInsertRowid });
+    try {
+      const info = getDb().prepare(`INSERT INTO exams
+        (patient_id, employee_id, od_sph, od_cyl, od_axis, od_pd, od_add,
+         os_sph, os_cyl, os_axis, os_pd, os_add,
+         od_va_before, os_va_before, od_va_after, os_va_after,
+         diagnosis, medical_notes, recommendations, next_visit_date, exam_image)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(b.patient_id, b.employee_id, b.od_sph, b.od_cyl, b.od_axis, b.od_pd, b.od_add,
+             b.os_sph, b.os_cyl, b.os_axis, b.os_pd, b.os_add,
+             b.od_va_before, b.os_va_before, b.od_va_after, b.os_va_after,
+             b.diagnosis, b.medical_notes, b.recommendations, b.next_visit_date, b.exam_image || null);
+      broadcast('exams'); res.json({ id: info.lastInsertRowid });
+    } catch (err) {
+      res.status(500).json({ error: 'تعذّر حفظ الفحص: ' + err.message });
+    }
   });
   app.delete('/api/exams/:id', (req, res) => {
     getDb().prepare('DELETE FROM exams WHERE id=?').run(req.params.id);
@@ -143,21 +147,61 @@ function startServer(port, onReady) {
 
   // ---------- الفئات ----------
   app.get('/api/categories', (req, res) => {
-    res.json(getDb().prepare('SELECT * FROM categories ORDER BY name').all());
+    res.json(getDb().prepare('SELECT * FROM categories ORDER BY sort_order ASC, id ASC').all());
   });
   app.post('/api/categories', (req, res) => {
     const { name, parent_id } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'اسم الفئة مطلوب' });
     const parentId = parent_id ? Number(parent_id) : null;
     try {
-      const info = getDb().prepare('INSERT INTO categories (name, parent_id) VALUES (?, ?)').run(name.trim(), parentId);
+      const db = getDb();
+      const maxOrder = parentId
+        ? db.prepare('SELECT COALESCE(MAX(sort_order),0) m FROM categories WHERE parent_id=?').get(parentId)
+        : db.prepare('SELECT COALESCE(MAX(sort_order),0) m FROM categories WHERE parent_id IS NULL').get();
+      const info = db.prepare('INSERT INTO categories (name, parent_id, sort_order) VALUES (?, ?, ?)').run(name.trim(), parentId, maxOrder.m + 1);
       broadcast('categories');
-      res.json({ id: info.lastInsertRowid, name: name.trim(), parent_id: parentId });
+      res.json({ id: info.lastInsertRowid, name: name.trim(), parent_id: parentId, sort_order: maxOrder.m + 1 });
     } catch (err) {
       const existing = getDb().prepare('SELECT * FROM categories WHERE name=?').get(name.trim());
       if (existing) return res.json(existing);
       res.status(500).json({ error: err.message });
     }
+  });
+  app.put('/api/categories/:id', (req, res) => {
+    const { name } = req.body;
+    if (!name || !String(name).trim()) return res.status(400).json({ error: 'اسم الفئة مطلوب' });
+    const db = getDb();
+    const cat = db.prepare('SELECT * FROM categories WHERE id=?').get(req.params.id);
+    if (!cat) return res.status(404).json({ error: 'الفئة غير موجودة' });
+    try {
+      db.prepare('UPDATE categories SET name=? WHERE id=?').run(name.trim(), req.params.id);
+      // حقل الفئة في جدول المنتجات نصّي (اسم الفئة) وليس مفتاحًا خارجيًا، لذا يجب تحديث المنتجات المرتبطة عند إعادة التسمية
+      db.prepare('UPDATE products SET category=? WHERE category=?').run(name.trim(), cat.name);
+      broadcast('categories'); broadcast('products');
+      res.json({ ok: true, name: name.trim() });
+    } catch (err) {
+      res.status(500).json({ error: 'اسم الفئة مستخدم مسبقًا أو حدث خطأ: ' + err.message });
+    }
+  });
+  app.put('/api/categories/:id/move', (req, res) => {
+    const db = getDb();
+    const { direction } = req.body;
+    const cat = db.prepare('SELECT * FROM categories WHERE id=?').get(req.params.id);
+    if (!cat) return res.status(404).json({ error: 'الفئة غير موجودة' });
+    const neighbor = cat.parent_id
+      ? (direction === 'up'
+          ? db.prepare('SELECT * FROM categories WHERE parent_id=? AND sort_order < ? ORDER BY sort_order DESC LIMIT 1').get(cat.parent_id, cat.sort_order)
+          : db.prepare('SELECT * FROM categories WHERE parent_id=? AND sort_order > ? ORDER BY sort_order ASC LIMIT 1').get(cat.parent_id, cat.sort_order))
+      : (direction === 'up'
+          ? db.prepare('SELECT * FROM categories WHERE parent_id IS NULL AND sort_order < ? ORDER BY sort_order DESC LIMIT 1').get(cat.sort_order)
+          : db.prepare('SELECT * FROM categories WHERE parent_id IS NULL AND sort_order > ? ORDER BY sort_order ASC LIMIT 1').get(cat.sort_order));
+    if (!neighbor) return res.json({ ok: true });
+    const swap = db.transaction(() => {
+      db.prepare('UPDATE categories SET sort_order=? WHERE id=?').run(neighbor.sort_order, cat.id);
+      db.prepare('UPDATE categories SET sort_order=? WHERE id=?').run(cat.sort_order, neighbor.id);
+    });
+    swap();
+    broadcast('categories'); res.json({ ok: true });
   });
   app.delete('/api/categories/:id', (req, res) => {
     const db = getDb();
@@ -169,14 +213,16 @@ function startServer(port, onReady) {
 
   // ---------- المنتجات ----------
   app.get('/api/products', (req, res) => {
-    res.json(getDb().prepare('SELECT * FROM products ORDER BY id DESC').all());
+    res.json(getDb().prepare('SELECT * FROM products ORDER BY sort_order ASC, id ASC').all());
   });
   app.post('/api/products', (req, res) => {
     const { name, category, barcode, price, cost, stock_qty } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'اسم المنتج مطلوب' });
     if (Number(price) < 0 || Number(cost) < 0 || Number(stock_qty) < 0) return res.status(400).json({ error: 'لا يمكن أن يكون السعر أو التكلفة أو الكمية بقيمة سالبة' });
-    const info = getDb().prepare('INSERT INTO products (name, category, barcode, price, cost, stock_qty) VALUES (?,?,?,?,?,?)')
-      .run(name.trim(), category, barcode, price || 0, cost || 0, stock_qty || 0);
+    const db = getDb();
+    const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order),0) m FROM products').get();
+    const info = db.prepare('INSERT INTO products (name, category, barcode, price, cost, stock_qty, sort_order) VALUES (?,?,?,?,?,?,?)')
+      .run(name.trim(), category, barcode, price || 0, cost || 0, stock_qty || 0, maxOrder.m + 1);
     broadcast('products'); res.json({ id: info.lastInsertRowid });
   });
   app.put('/api/products/:id', (req, res) => {
@@ -185,6 +231,22 @@ function startServer(port, onReady) {
     if (Number(price) < 0 || Number(cost) < 0 || Number(stock_qty) < 0) return res.status(400).json({ error: 'لا يمكن أن يكون السعر أو التكلفة أو الكمية بقيمة سالبة' });
     getDb().prepare('UPDATE products SET name=?, category=?, barcode=?, price=?, cost=?, stock_qty=? WHERE id=?')
       .run(name.trim(), category, barcode, price, cost, stock_qty, req.params.id);
+    broadcast('products'); res.json({ ok: true });
+  });
+  app.put('/api/products/:id/move', (req, res) => {
+    const db = getDb();
+    const { direction } = req.body;
+    const prod = db.prepare('SELECT * FROM products WHERE id=?').get(req.params.id);
+    if (!prod) return res.status(404).json({ error: 'المنتج غير موجود' });
+    const neighbor = direction === 'up'
+      ? db.prepare('SELECT * FROM products WHERE sort_order < ? ORDER BY sort_order DESC LIMIT 1').get(prod.sort_order)
+      : db.prepare('SELECT * FROM products WHERE sort_order > ? ORDER BY sort_order ASC LIMIT 1').get(prod.sort_order);
+    if (!neighbor) return res.json({ ok: true });
+    const swap = db.transaction(() => {
+      db.prepare('UPDATE products SET sort_order=? WHERE id=?').run(neighbor.sort_order, prod.id);
+      db.prepare('UPDATE products SET sort_order=? WHERE id=?').run(prod.sort_order, neighbor.id);
+    });
+    swap();
     broadcast('products'); res.json({ ok: true });
   });
   app.delete('/api/products/:id', (req, res) => {

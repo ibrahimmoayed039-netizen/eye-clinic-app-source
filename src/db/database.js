@@ -50,6 +50,7 @@ function initDatabase(userDataPath) {
       medical_notes TEXT,
       recommendations TEXT,
       next_visit_date TEXT,
+      exam_image TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY(patient_id) REFERENCES patients(id),
       FOREIGN KEY(employee_id) REFERENCES employees(id)
@@ -246,7 +247,7 @@ function initDatabase(userDataPath) {
 
   // ترحيل تلقائي: إضافة أعمدة جديدة لقواعد بيانات قديمة تم إنشاؤها قبل هذا التحديث
   const examColumns = db.prepare("PRAGMA table_info(exams)").all().map(c => c.name);
-  const newExamColumns = ['od_va_before', 'os_va_before', 'od_va_after', 'os_va_after'];
+  const newExamColumns = ['od_va_before', 'os_va_before', 'od_va_after', 'os_va_after', 'exam_image'];
   newExamColumns.forEach(col => {
     if (!examColumns.includes(col)) {
       db.exec(`ALTER TABLE exams ADD COLUMN ${col} TEXT`);
@@ -275,6 +276,24 @@ function initDatabase(userDataPath) {
   const employeeColumns = db.prepare("PRAGMA table_info(employees)").all().map(c => c.name);
   if (!employeeColumns.includes('permissions')) {
     db.exec('ALTER TABLE employees ADD COLUMN permissions TEXT');
+  }
+
+  // ترحيل تلقائي: إضافة عمود ترتيب العرض للفئات (يحافظ على الترتيب الحالي حسب الاسم كنقطة بداية)
+  const catOrderColumns = db.prepare("PRAGMA table_info(categories)").all().map(c => c.name);
+  if (!catOrderColumns.includes('sort_order')) {
+    db.exec('ALTER TABLE categories ADD COLUMN sort_order INTEGER DEFAULT 0');
+    const existingCats = db.prepare('SELECT id FROM categories ORDER BY name').all();
+    const setCatOrder = db.prepare('UPDATE categories SET sort_order=? WHERE id=?');
+    existingCats.forEach((c, i) => setCatOrder.run(i + 1, c.id));
+  }
+
+  // ترحيل تلقائي: إضافة عمود ترتيب العرض للمنتجات (يحافظ على ترتيب العرض الحالي: الأحدث أولًا)
+  const prodOrderColumns = db.prepare("PRAGMA table_info(products)").all().map(c => c.name);
+  if (!prodOrderColumns.includes('sort_order')) {
+    db.exec('ALTER TABLE products ADD COLUMN sort_order INTEGER DEFAULT 0');
+    const existingProds = db.prepare('SELECT id FROM products ORDER BY id DESC').all();
+    const setProdOrder = db.prepare('UPDATE products SET sort_order=? WHERE id=?');
+    existingProds.forEach((p, i) => setProdOrder.run(i + 1, p.id));
   }
 
   const adminExists = db.prepare('SELECT COUNT(*) c FROM employees').get();

@@ -31,11 +31,14 @@ async function loadProducts() {
 
   const box = document.getElementById('products-table');
   if (!filtered.length) { box.innerHTML = '<div class="empty">لا توجد منتجات بعد</div>'; return; }
+  // أزرار تغيير التسلسل (⬆⬇) تُعرض فقط عند عدم وجود بحث أو تصفية بالفئة،
+  // لأن الترتيب اليدوي يعتمد على ترتيب القائمة الكاملة غير المُصفّاة
+  const reorderEnabled = !search && !cat;
   box.innerHTML = `
     <table>
       <thead><tr><th>#</th><th>الاسم</th><th>الفئة</th><th>الباركود</th><th>السعر</th><th>التكلفة</th><th>المخزون</th><th>إجراءات</th></tr></thead>
       <tbody>
-        ${filtered.map(p => `
+        ${filtered.map((p, i) => `
           <tr>
             <td>${p.id}</td>
             <td>${p.name}</td>
@@ -45,6 +48,10 @@ async function loadProducts() {
             <td>${p.cost.toFixed(2)}</td>
             <td>${p.stock_qty <= 3 ? `<span style="color:#dc2626;font-weight:600">${p.stock_qty}</span>` : p.stock_qty}</td>
             <td>
+              ${reorderEnabled ? `
+                <button class="btn small secondary" onclick="moveProduct(${p.id}, 'up')" ${i === 0 ? 'disabled' : ''} title="نقل للأعلى">⬆</button>
+                <button class="btn small secondary" onclick="moveProduct(${p.id}, 'down')" ${i === filtered.length - 1 ? 'disabled' : ''} title="نقل للأسفل">⬇</button>
+              ` : ''}
               <button class="btn small" onclick="openProductModal(${p.id})">تعديل</button>
               <button class="btn small danger" onclick="deleteProduct(${p.id})">حذف</button>
             </td>
@@ -52,7 +59,22 @@ async function loadProducts() {
         `).join('')}
       </tbody>
     </table>
+    ${!reorderEnabled ? '<div class="empty" style="padding:6px 2px;font-size:12px">امسح البحث والتصفية بالفئة لتتمكن من تغيير تسلسل عرض المنتجات</div>' : ''}
   `;
+}
+
+async function moveProduct(id, direction) {
+  try {
+    await API.put(`/api/products/${id}/move`, { direction });
+    loadProducts();
+  } catch (err) {
+    showAlertModal('تعذر تغيير ترتيب المنتج: ' + err.message);
+  }
+}
+
+// إفلات أحرف الاقتباس بأمان عند تضمين نص المستخدم داخل سمات onclick
+function escapeQuotes(str) {
+  return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 async function deleteProduct(id) {
@@ -92,26 +114,55 @@ async function renderCategoryList() {
   if (!box) return;
   const mains = cats.filter(c => !c.parent_id);
   if (!mains.length) { box.innerHTML = '<div class="empty" style="padding:10px">لا توجد فئات بعد</div>'; return; }
-  box.innerHTML = mains.map(m => {
+  box.innerHTML = mains.map((m, mi) => {
     const children = cats.filter(c => c.parent_id === m.id);
     return `
       <div style="border-bottom:1px solid #eee;padding:6px 0">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-weight:600">${m.name}</span>
           <div style="display:flex;gap:4px">
-            <button class="btn small secondary" onclick="addBranch(${m.id}, '${m.name.replace(/'/g, "")}')">+ فرع</button>
+            <button class="btn small secondary" onclick="moveCategory(${m.id}, 'up')" ${mi === 0 ? 'disabled' : ''} title="نقل للأعلى">⬆</button>
+            <button class="btn small secondary" onclick="moveCategory(${m.id}, 'down')" ${mi === mains.length - 1 ? 'disabled' : ''} title="نقل للأسفل">⬇</button>
+            <button class="btn small secondary" onclick="renameCategory(${m.id}, '${escapeQuotes(m.name)}')">تعديل</button>
+            <button class="btn small secondary" onclick="addBranch(${m.id}, '${escapeQuotes(m.name)}')">+ فرع</button>
             <button class="btn small danger" onclick="deleteCategory(${m.id}, ${children.length})">حذف</button>
           </div>
         </div>
-        ${children.map(c => `
+        ${children.map((c, ci) => `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0 5px 22px;color:#555;font-size:13px">
             <span>└ ${c.name}</span>
-            <button class="btn small danger" onclick="deleteCategory(${c.id}, 0)">حذف</button>
+            <div style="display:flex;gap:4px">
+              <button class="btn small secondary" onclick="moveCategory(${c.id}, 'up')" ${ci === 0 ? 'disabled' : ''} title="نقل للأعلى">⬆</button>
+              <button class="btn small secondary" onclick="moveCategory(${c.id}, 'down')" ${ci === children.length - 1 ? 'disabled' : ''} title="نقل للأسفل">⬇</button>
+              <button class="btn small secondary" onclick="renameCategory(${c.id}, '${escapeQuotes(c.name)}')">تعديل</button>
+              <button class="btn small danger" onclick="deleteCategory(${c.id}, 0)">حذف</button>
+            </div>
           </div>
         `).join('')}
       </div>
     `;
   }).join('');
+}
+
+async function renameCategory(id, currentName) {
+  const name = await showPromptModal('الاسم الجديد للفئة:', currentName);
+  if (!name || !name.trim() || name.trim() === currentName) return;
+  try {
+    await API.put(`/api/categories/${id}`, { name: name.trim() });
+    renderCategoryList();
+    loadProducts();
+  } catch (err) {
+    showAlertModal('تعذر تعديل اسم الفئة: ' + err.message);
+  }
+}
+
+async function moveCategory(id, direction) {
+  try {
+    await API.put(`/api/categories/${id}/move`, { direction });
+    renderCategoryList();
+  } catch (err) {
+    showAlertModal('تعذر تغيير ترتيب الفئة: ' + err.message);
+  }
 }
 
 async function addCategory() {

@@ -160,6 +160,7 @@ function buildExamReportHtml(exam, settings) {
     <p><b>ملاحظات طبية:</b> ${exam.medical_notes || '-'}</p>
     <p><b>التوصيات:</b> ${exam.recommendations || '-'}</p>
     <p><b>موعد المراجعة القادم:</b> ${exam.next_visit_date || '-'}</p>
+    ${exam.exam_image ? `<p><b>صورة الفحص (فحص خارجي):</b></p><img src="${exam.exam_image}" style="max-width:300px;display:block;margin:6px 0">` : ''}
     <div class="footer">${s.invoice_footer_text || 'نتمنى لكم دوام الصحة والعافية 🌿'}</div>
   `;
   return printBoilerplate('تقرير فحص', body, s);

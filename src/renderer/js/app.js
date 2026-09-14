@@ -1,4 +1,5 @@
 let CURRENT_USER = null;
+let SELECTED_LOGIN_USERNAME = null;
 
 const TABS = [
   { id: 'patients', label: '👤 المرضى', render: renderPatientsTab },
@@ -18,26 +19,81 @@ const TABS = [
 
 let activeTab = 'patients';
 
+async function loadLoginUsers() {
+  const listBox = document.getElementById('login-users-list');
+  listBox.innerHTML = '<div class="login-users-empty">جارِ التحميل...</div>';
+  try {
+    const employees = await API.get('/api/employees');
+    const active = employees.filter(e => e.active);
+    if (!active.length) {
+      listBox.innerHTML = '<div class="login-users-empty">لا يوجد مستخدمون نشِطون</div>';
+      return;
+    }
+    listBox.innerHTML = active.map(e => `
+      <button type="button" class="login-user-btn" onclick="selectLoginUser('${escapeQuotes(e.username)}', '${escapeQuotes(e.full_name)}', '${escapeQuotes(e.role || '')}')">
+        <span class="login-user-avatar">${(e.full_name || '?').trim().charAt(0)}</span>
+        <span class="login-user-info">
+          <span class="login-user-name">${e.full_name}</span>
+          <span class="login-user-role">${e.role || ''}</span>
+        </span>
+      </button>
+    `).join('');
+  } catch (err) {
+    listBox.innerHTML = '<div class="login-users-empty">تعذر تحميل قائمة المستخدمين</div>';
+  }
+}
+
+function selectLoginUser(username, fullName, role) {
+  SELECTED_LOGIN_USERNAME = username;
+  document.getElementById('login-users-step').style.display = 'none';
+  document.getElementById('login-password-step').style.display = 'block';
+  document.getElementById('login-subtitle').textContent = 'أدخل كلمة المرور للمتابعة';
+  document.getElementById('login-selected-user').innerHTML = `
+    <span class="login-user-avatar">${(fullName || '?').trim().charAt(0)}</span>
+    <span class="login-user-info">
+      <span class="login-user-name">${fullName}</span>
+      <span class="login-user-role">${role || ''}</span>
+    </span>
+  `;
+  document.getElementById('login-error').textContent = '';
+  const passInput = document.getElementById('login-pass');
+  passInput.value = '';
+  passInput.focus();
+}
+
+function backToUserList() {
+  SELECTED_LOGIN_USERNAME = null;
+  document.getElementById('login-password-step').style.display = 'none';
+  document.getElementById('login-users-step').style.display = 'block';
+  document.getElementById('login-subtitle').textContent = 'اختر اسمك للمتابعة';
+  document.getElementById('login-error').textContent = '';
+}
+
 async function doLogin() {
-  const username = document.getElementById('login-user').value.trim();
+  if (!SELECTED_LOGIN_USERNAME) return;
   const password = document.getElementById('login-pass').value;
   const errBox = document.getElementById('login-error');
   errBox.textContent = '';
   try {
-    const user = await API.post('/api/login', { username, password });
+    const user = await API.post('/api/login', { username: SELECTED_LOGIN_USERNAME, password });
     CURRENT_USER = user;
-    localStorage.setItem('clinic_user', JSON.stringify(user));
     startApp();
   } catch (e) {
     errBox.textContent = e.message;
   }
 }
 
+// تسجيل الخروج: لا يتم حفظ جلسة الدخول، لذا عند إغلاق البرنامج وإعادة فتحه
+// تظهر شاشة اختيار المستخدم من جديد تلقائيًا (بدون تسجيل دخول تلقائي)
 function logout() {
-  localStorage.removeItem('clinic_user');
   CURRENT_USER = null;
+  SELECTED_LOGIN_USERNAME = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-password-step').style.display = 'none';
+  document.getElementById('login-users-step').style.display = 'block';
+  document.getElementById('login-subtitle').textContent = 'اختر اسمك للمتابعة';
+  loadLoginUsers();
 }
 
 function startApp() {
@@ -201,10 +257,6 @@ function switchTab(id) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('clinic_user');
-  if (saved) {
-    CURRENT_USER = JSON.parse(saved);
-    startApp();
-  }
+  loadLoginUsers();
   document.getElementById('login-pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 });
