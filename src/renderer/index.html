@@ -9,7 +9,7 @@
 
   <div id="login-screen" class="login-page">
     <div class="login-card">
-      <div class="login-icon-badge">🩺</div>
+      <div class="login-icon-badge"><img src="assets/icon.png" alt="شعار البرنامج" class="login-icon-badge-img"></div>
       <h1 class="login-title">نظام إدارة عيادة النظر</h1>
       <p class="login-subtitle" id="login-subtitle">اختر اسمك للمتابعة</p>
 
@@ -33,10 +33,10 @@
 
   <div id="app" style="display:none">
     <div class="topbar">
-      <h1>🩺 نظام إدارة عيادة النظر</h1>
+      <h1><img src="assets/icon.png" alt="شعار البرنامج" class="topbar-logo"> نظام إدارة عيادة النظر</h1>
       <div style="display:flex; align-items:center; gap:12px;">
         <span class="status" id="current-user"></span>
-        <span class="status" id="conn-status">متصل بـ: ...</span>
+        <span class="status" id="conn-status" style="display:none">متصل بـ: ...</span>
         <button class="btn small secondary" onclick="logout()">خروج</button>
       </div>
     </div>

@@ -7,7 +7,7 @@ async function renderAboutTab(container) {
 
   container.innerHTML = `
     <div class="about-hero">
-      <div class="about-hero-badge">🩺</div>
+      <div class="about-hero-badge"><img src="assets/icon.png" alt="شعار البرنامج" class="about-hero-badge-img"></div>
       <h1 class="about-hero-title">${clinicName}</h1>
       <p class="about-hero-sub">نظام متكامل لإدارة عيادات النظر — المرضى، المبيعات، المخزون، والتقارير في مكان واحد</p>
     </div>

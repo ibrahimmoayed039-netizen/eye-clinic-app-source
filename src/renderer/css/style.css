@@ -15,7 +15,8 @@ input, textarea,
 img { -webkit-user-drag: none; user-drag: none; }
 
 .topbar { background:#0f766e; color:#fff; padding:12px 20px; display:flex; align-items:center; justify-content:space-between; }
-.topbar h1 { font-size:18px; }
+.topbar h1 { font-size:18px; display:flex; align-items:center; gap:8px; }
+.topbar-logo { width:24px; height:24px; border-radius:50%; object-fit:cover; }
 .topbar .status { font-size:12px; background:rgba(255,255,255,.15); padding:5px 12px; border-radius:20px; }
 
 .tabs { display:flex; background:#fff; border-bottom:2px solid #e5e7eb; overflow-x:auto; }
@@ -163,9 +164,10 @@ tr:hover { background:#fafafa; }
   border-radius:50%;
   background:linear-gradient(135deg,#14b8a6,#0f766e);
   display:flex; align-items:center; justify-content:center;
-  font-size:30px;
+  font-size:30px; overflow:hidden;
   animation:loginBadgePulse 2.6s ease-in-out infinite;
 }
+.login-icon-badge-img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
 .login-title { font-size:18px; font-weight:700; color:#111827; margin-bottom:4px; }
 .login-subtitle { font-size:13px; color:#8a93a1; margin-bottom:26px; }
 .login-form-group { text-align:right; margin-bottom:16px; }
@@ -235,7 +237,10 @@ body.ui-font-large table, body.ui-font-xlarge table { font-size:1em; }
 .about-hero-badge {
   width:64px; height:64px; border-radius:50%; background:rgba(255,255,255,.18);
   display:flex; align-items:center; justify-content:center; font-size:30px;
-  margin:0 auto 14px;
+  margin:0 auto 14px; overflow:hidden;
+}
+.about-hero-badge-img {
+  width:100%; height:100%; object-fit:cover; border-radius:50%;
 }
 .about-hero-title { font-size:22px; font-weight:700; margin-bottom:8px; }
 .about-hero-sub { font-size:13px; opacity:.9; max-width:560px; margin:0 auto; line-height:1.8; }

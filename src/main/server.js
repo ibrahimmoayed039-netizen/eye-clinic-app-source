@@ -824,6 +824,20 @@ function startServer(port, onReady) {
     res.status(500).json({ error: 'حدث خطأ غير متوقع في الخادم. حاول مرة أخرى.' });
   });
 
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`المنفذ ${port} مستخدم بالفعل من برنامج آخر أو نسخة سابقة من البرنامج لم تُغلق بالكامل.`);
+      const { dialog } = require('electron');
+      dialog.showErrorBox(
+        'تعذّر تشغيل الخادم',
+        `المنفذ ${port} مستخدم بالفعل.\n\nتأكد من إغلاق أي نسخة سابقة من البرنامج (تحقق من مدير المهام)، ثم أعد فتح البرنامج.\n\nإذا استمرت المشكلة، يمكنك تغيير رقم المنفذ من إعدادات البرنامج.`
+      );
+      require('electron').app.quit();
+    } else {
+      console.error('خطأ في تشغيل الخادم:', err);
+    }
+  });
+
   server.listen(port, '0.0.0.0', () => {
     console.log(`تم تشغيل الخادم على المنفذ ${port}`);
     if (typeof onReady === 'function') onReady();

@@ -262,6 +262,14 @@ function getInstalledPrintersViaPowerShell() {
 
 Menu.setApplicationMenu(null);
 
+// منع تشغيل أكثر من نسخة من البرنامج في نفس الوقت. بدون هذا، فتح البرنامج
+// مرتين (أو بقاء نسخة سابقة عالقة في الخلفية) يجعل النسخة الثانية تحاول
+// استخدام نفس منفذ الخادم (البورت) فتنهار برسالة "address already in use".
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 const store = new Store();
 let mainWindow;
 let previewWindow;
@@ -334,6 +342,15 @@ app.whenReady().then(() => {
 app.whenReady().then(createMainWindow);
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createMainWindow(); });
+
+// إذا حاول المستخدم فتح نسخة ثانية من البرنامج، نعيد إظهار النافذة الحالية
+// بدل فتح نافذة جديدة تتصارع على نفس المنفذ.
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
 
 ipcMain.handle('setup:save', (event, config) => {
   store.set('mode', config.mode);
