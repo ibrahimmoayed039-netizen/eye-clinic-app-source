@@ -36,11 +36,18 @@ function startServer(port, onReady) {
     }
   });
   app.put('/api/employees/:id', (req, res) => {
-    const { full_name, role, phone, active, permissions } = req.body;
+    const { full_name, role, phone, active, permissions, password } = req.body;
     if (!full_name || !String(full_name).trim()) return res.status(400).json({ error: 'اسم الموظف مطلوب' });
     const permsJson = (role === 'مدير' || !Array.isArray(permissions)) ? null : JSON.stringify(permissions);
-    getDb().prepare('UPDATE employees SET full_name=?, role=?, phone=?, active=?, permissions=? WHERE id=?')
-      .run(full_name.trim(), role, phone, active ? 1 : 0, permsJson, req.params.id);
+    // كلمة المرور اختيارية عند التعديل: إن أُرسلت (غير فارغة) يتم تغييرها، وإن لم تُرسل تبقى كما هي
+    const newPassword = password && String(password).trim() ? String(password).trim() : null;
+    if (newPassword) {
+      getDb().prepare('UPDATE employees SET full_name=?, role=?, phone=?, active=?, permissions=?, password=? WHERE id=?')
+        .run(full_name.trim(), role, phone, active ? 1 : 0, permsJson, newPassword, req.params.id);
+    } else {
+      getDb().prepare('UPDATE employees SET full_name=?, role=?, phone=?, active=?, permissions=? WHERE id=?')
+        .run(full_name.trim(), role, phone, active ? 1 : 0, permsJson, req.params.id);
+    }
     broadcast('employees'); res.json({ ok: true });
   });
   app.delete('/api/employees/:id', (req, res) => {

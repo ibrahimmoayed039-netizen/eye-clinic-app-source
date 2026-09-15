@@ -90,7 +90,10 @@ async function openEmployeeModal(id) {
       <div class="grid-2">
         <div class="form-group"><label>الاسم الكامل</label><input id="em-name" value="${e.full_name}"></div>
         <div class="form-group"><label>اسم المستخدم</label><input id="em-username" value="${e.username}" ${id ? 'disabled' : ''}></div>
-        ${!id ? `<div class="form-group"><label>كلمة المرور</label><input id="em-password" type="text" placeholder="افتراضي: 123456"></div>` : ''}
+        <div class="form-group">
+          <label>${id ? 'تعديل كلمة المرور' : 'كلمة المرور'}</label>
+          <input id="em-password" type="text" placeholder="${id ? 'اتركها فارغة إذا لا تريد تغييرها' : 'افتراضي: 123456'}">
+        </div>
         <div class="form-group"><label>الدور</label>
           <select id="em-role" onchange="onEmployeeRoleChange()">
             <option ${e.role==='مدير'?'selected':''}>مدير</option>
@@ -184,7 +187,10 @@ async function saveEmployee(id) {
   try {
     if (id) {
       const active = document.getElementById('em-active').value;
-      await API.put(`/api/employees/${id}`, { full_name, role, phone, active: active === '1', permissions });
+      const newPassword = document.getElementById('em-password').value.trim();
+      const payload = { full_name, role, phone, active: active === '1', permissions };
+      if (newPassword) payload.password = newPassword;
+      await API.put(`/api/employees/${id}`, payload);
     } else {
       const username = document.getElementById('em-username').value.trim();
       const password = document.getElementById('em-password').value.trim() || '123456';
