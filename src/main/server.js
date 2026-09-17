@@ -169,7 +169,8 @@ function startServer(port, onReady) {
       broadcast('categories');
       res.json({ id: info.lastInsertRowid, name: name.trim(), parent_id: parentId, sort_order: maxOrder.m + 1 });
     } catch (err) {
-      const existing = getDb().prepare('SELECT * FROM categories WHERE name=?').get(name.trim());
+      // فريد الآن ضمن نفس الفئة الأب فقط، لذا يجب البحث عن التكرار بنفس الاسم + نفس الأب
+      const existing = getDb().prepare('SELECT * FROM categories WHERE name=? AND parent_id IS ?').get(name.trim(), parentId);
       if (existing) return res.json(existing);
       res.status(500).json({ error: err.message });
     }

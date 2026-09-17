@@ -107,6 +107,15 @@ function openCategoryManager() {
   renderCategoryList();
 }
 
+// أرقام الفئات الرئيسية المفتوحة حاليًا (تُطوى الفروع افتراضيًا لتقليل الازدحام)
+let EXPANDED_CATEGORY_IDS = new Set();
+
+function toggleCategoryBranches(id) {
+  if (EXPANDED_CATEGORY_IDS.has(id)) EXPANDED_CATEGORY_IDS.delete(id);
+  else EXPANDED_CATEGORY_IDS.add(id);
+  renderCategoryList();
+}
+
 async function renderCategoryList() {
   const cats = await API.get('/api/categories');
   ALL_CATEGORIES_CACHE = cats;
@@ -116,10 +125,15 @@ async function renderCategoryList() {
   if (!mains.length) { box.innerHTML = '<div class="empty" style="padding:10px">لا توجد فئات بعد</div>'; return; }
   box.innerHTML = mains.map((m, mi) => {
     const children = cats.filter(c => c.parent_id === m.id);
+    const isOpen = EXPANDED_CATEGORY_IDS.has(m.id);
     return `
       <div style="border-bottom:1px solid #eee;padding:6px 0">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">${m.name}</span>
+          <div style="display:flex;align-items:center;gap:6px;cursor:${children.length ? 'pointer' : 'default'}" ${children.length ? `onclick="toggleCategoryBranches(${m.id})"` : ''}>
+            <button class="btn small secondary" style="width:26px;padding:4px 0;${children.length ? '' : 'visibility:hidden'}" onclick="event.stopPropagation(); toggleCategoryBranches(${m.id})" title="${isOpen ? 'طي الفروع' : 'عرض الفروع'}">${isOpen ? '−' : '+'}</button>
+            <span style="font-weight:600">${m.name}</span>
+            ${children.length ? `<span style="color:#888;font-size:12px">(${children.length})</span>` : ''}
+          </div>
           <div style="display:flex;gap:4px">
             <button class="btn small secondary" onclick="moveCategory(${m.id}, 'up')" ${mi === 0 ? 'disabled' : ''} title="نقل للأعلى">⬆</button>
             <button class="btn small secondary" onclick="moveCategory(${m.id}, 'down')" ${mi === mains.length - 1 ? 'disabled' : ''} title="نقل للأسفل">⬇</button>
@@ -128,7 +142,7 @@ async function renderCategoryList() {
             <button class="btn small danger" onclick="deleteCategory(${m.id}, ${children.length})">حذف</button>
           </div>
         </div>
-        ${children.map((c, ci) => `
+        ${isOpen ? children.map((c, ci) => `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0 5px 22px;color:#555;font-size:13px">
             <span>└ ${c.name}</span>
             <div style="display:flex;gap:4px">
@@ -138,7 +152,7 @@ async function renderCategoryList() {
               <button class="btn small danger" onclick="deleteCategory(${c.id}, 0)">حذف</button>
             </div>
           </div>
-        `).join('')}
+        `).join('') : ''}
       </div>
     `;
   }).join('');
@@ -183,6 +197,7 @@ async function addBranch(parentId, parentName) {
   if (!name || !name.trim()) return;
   try {
     await API.post('/api/categories', { name: name.trim(), parent_id: parentId });
+    EXPANDED_CATEGORY_IDS.add(parentId);
     renderCategoryList();
   } catch (err) {
     showAlertModal('تعذر إضافة الفرع: ' + err.message);

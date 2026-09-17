@@ -58,7 +58,7 @@ function initDatabase(userDataPath) {
 
     CREATE TABLE IF NOT EXISTS categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
       parent_id INTEGER
     );
 
@@ -286,6 +286,27 @@ function initDatabase(userDataPath) {
     const setCatOrder = db.prepare('UPDATE categories SET sort_order=? WHERE id=?');
     existingCats.forEach((c, i) => setCatOrder.run(i + 1, c.id));
   }
+
+  // ترحيل تلقائي: كان اسم الفئة فريدًا في كل الجدول (UNIQUE عالمي)، ما يمنع تكرار
+  // نفس اسم الفرع (مثل "CYL -1.00") تحت أكثر من فئة رئيسية. نحوّله إلى فريد ضمن
+  // نفس الفئة الأب فقط، مع الحفاظ على كل البيانات الحالية.
+  const catTableDef = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='categories'").get();
+  if (catTableDef && /name\s+TEXT\s+UNIQUE/i.test(catTableDef.sql)) {
+    db.exec(`
+      CREATE TABLE categories_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        parent_id INTEGER,
+        sort_order INTEGER DEFAULT 0
+      );
+      INSERT INTO categories_new (id, name, parent_id, sort_order)
+        SELECT id, name, parent_id, sort_order FROM categories;
+      DROP TABLE categories;
+      ALTER TABLE categories_new RENAME TO categories;
+    `);
+  }
+  // فهرس فريد يمنع تكرار نفس الاسم داخل نفس الفئة الأب (ويسمح بتكراره بين فئات أب مختلفة)
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_name_parent ON categories(name, COALESCE(parent_id, 0));');
 
   // ترحيل تلقائي: إضافة عمود ترتيب العرض للمنتجات (يحافظ على ترتيب العرض الحالي: الأحدث أولًا)
   const prodOrderColumns = db.prepare("PRAGMA table_info(products)").all().map(c => c.name);
