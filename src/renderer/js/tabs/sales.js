@@ -111,12 +111,10 @@ async function renderSalesTab(container, restoreData) {
   document.getElementById('s-barcode-scan')?.focus();
 }
 
-// تُرجع أسماء الفئة الرئيسية + جميع فروعها (لتصفية منتجات الفئة بالكامل عند عدم تحديد فرع)
-function categoryAndBranchNames(mainName) {
-  const main = SALES_CATEGORIES_CACHE.find(c => c.name === mainName && !c.parent_id);
-  if (!main) return [mainName];
-  const branches = SALES_CATEGORIES_CACHE.filter(c => c.parent_id === main.id).map(c => c.name);
-  return [mainName, ...branches];
+// تُرجع معرّفات الفئة الرئيسية + جميع فروعها (لتصفية منتجات الفئة بالكامل عند عدم تحديد فرع)
+function categoryAndBranchIds(mainId) {
+  const branches = SALES_CATEGORIES_CACHE.filter(c => c.parent_id === mainId).map(c => c.id);
+  return [mainId, ...branches];
 }
 
 function renderCategoryTabs() {
@@ -124,40 +122,40 @@ function renderCategoryTabs() {
   if (!box) return;
   const mains = SALES_CATEGORIES_CACHE.filter(c => !c.parent_id);
   const countAll = SALES_PRODUCTS_CACHE.length;
-  const tabs = [{ name: '', label: 'الكل', count: countAll }, ...mains.map(c => ({
-    name: c.name,
+  const tabs = [{ id: '', label: 'الكل', count: countAll }, ...mains.map(c => ({
+    id: c.id,
     label: c.name,
-    count: SALES_PRODUCTS_CACHE.filter(p => categoryAndBranchNames(c.name).includes(p.category)).length,
+    count: SALES_PRODUCTS_CACHE.filter(p => categoryAndBranchIds(c.id).includes(p.category_id)).length,
   }))];
   box.innerHTML = tabs.map(t => `
-    <button type="button" class="category-tab ${SALES_ACTIVE_CATEGORY === t.name ? 'active' : ''}" onclick="selectSalesCategory('${t.name.replace(/'/g, "")}')">
+    <button type="button" class="category-tab ${SALES_ACTIVE_CATEGORY === t.id ? 'active' : ''}" onclick="selectSalesCategory(${t.id === '' ? "''" : t.id})">
       ${t.label} <span class="category-tab-count">${t.count}</span>
     </button>
   `).join('');
 
   const branchBox = document.getElementById('s-branch-tabs');
   if (!branchBox) return;
-  const activeMain = mains.find(c => c.name === SALES_ACTIVE_CATEGORY);
+  const activeMain = mains.find(c => c.id === SALES_ACTIVE_CATEGORY);
   const branches = activeMain ? SALES_CATEGORIES_CACHE.filter(c => c.parent_id === activeMain.id) : [];
   if (!branches.length) { branchBox.innerHTML = ''; branchBox.style.display = 'none'; return; }
   branchBox.style.display = 'flex';
-  const branchTabs = [{ name: '', label: 'كل ' + activeMain.name }, ...branches.map(b => ({ name: b.name, label: b.name }))];
+  const branchTabs = [{ id: '', label: 'كل ' + activeMain.name }, ...branches.map(b => ({ id: b.id, label: b.name }))];
   branchBox.innerHTML = branchTabs.map(t => `
-    <button type="button" class="category-tab branch-tab ${SALES_ACTIVE_BRANCH === t.name ? 'active' : ''}" onclick="selectSalesBranch('${t.name.replace(/'/g, "")}')">
+    <button type="button" class="category-tab branch-tab ${SALES_ACTIVE_BRANCH === t.id ? 'active' : ''}" onclick="selectSalesBranch(${t.id === '' ? "''" : t.id})">
       ${t.label}
     </button>
   `).join('');
 }
 
-function selectSalesCategory(name) {
-  SALES_ACTIVE_CATEGORY = name;
+function selectSalesCategory(id) {
+  SALES_ACTIVE_CATEGORY = id;
   SALES_ACTIVE_BRANCH = '';
   renderCategoryTabs();
   loadProductGrid();
 }
 
-function selectSalesBranch(name) {
-  SALES_ACTIVE_BRANCH = name;
+function selectSalesBranch(id) {
+  SALES_ACTIVE_BRANCH = id;
   renderCategoryTabs();
   loadProductGrid();
 }
@@ -166,11 +164,11 @@ function loadProductGrid() {
   const search = (document.getElementById('s-product-search')?.value || '').toLowerCase();
   let filtered = SALES_PRODUCTS_CACHE;
   if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search));
-  if (SALES_ACTIVE_BRANCH) {
-    filtered = filtered.filter(p => p.category === SALES_ACTIVE_BRANCH);
-  } else if (SALES_ACTIVE_CATEGORY) {
-    const names = categoryAndBranchNames(SALES_ACTIVE_CATEGORY);
-    filtered = filtered.filter(p => names.includes(p.category));
+  if (SALES_ACTIVE_BRANCH !== '') {
+    filtered = filtered.filter(p => p.category_id === SALES_ACTIVE_BRANCH);
+  } else if (SALES_ACTIVE_CATEGORY !== '') {
+    const ids = categoryAndBranchIds(SALES_ACTIVE_CATEGORY);
+    filtered = filtered.filter(p => ids.includes(p.category_id));
   }
   const box = document.getElementById('product-grid');
   if (!filtered.length) { box.innerHTML = '<div class="empty" style="grid-column:1/-1">لا توجد منتجات مطابقة</div>'; return; }

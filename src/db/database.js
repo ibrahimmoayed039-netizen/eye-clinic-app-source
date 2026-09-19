@@ -66,6 +66,7 @@ function initDatabase(userDataPath) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       category TEXT,
+      category_id INTEGER,
       barcode TEXT,
       price REAL DEFAULT 0,
       cost REAL DEFAULT 0,
@@ -307,6 +308,22 @@ function initDatabase(userDataPath) {
   }
   // فهرس فريد يمنع تكرار نفس الاسم داخل نفس الفئة الأب (ويسمح بتكراره بين فئات أب مختلفة)
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_name_parent ON categories(name, COALESCE(parent_id, 0));');
+
+  // ترحيل تلقائي: كانت المنتجات تُربط بفئتها عبر الاسم النصي فقط (عمود category)،
+  // وهذا كان يسبب تداخل الفروع المتشابهة الاسم تحت فئات أب مختلفة (مثل CYL -1.00
+  // تحت فلتر+ وديفل-). نضيف عمود category_id لربط دقيق بمعرّف الفئة، ونملأه تلقائيًا
+  // من الاسم الحالي لكل منتج (أفضل تطابق متاح وقت الترحيل).
+  const prodColumns = db.prepare("PRAGMA table_info(products)").all().map(c => c.name);
+  if (!prodColumns.includes('category_id')) {
+    db.exec('ALTER TABLE products ADD COLUMN category_id INTEGER');
+    const prodsToLink = db.prepare("SELECT id, category FROM products WHERE category IS NOT NULL AND category <> ''").all();
+    const findCatByName = db.prepare('SELECT id FROM categories WHERE name=? LIMIT 1');
+    const setProdCat = db.prepare('UPDATE products SET category_id=? WHERE id=?');
+    prodsToLink.forEach(p => {
+      const match = findCatByName.get(p.category);
+      if (match) setProdCat.run(match.id, p.id);
+    });
+  }
 
   // ترحيل تلقائي: إضافة عمود ترتيب العرض للمنتجات (يحافظ على ترتيب العرض الحالي: الأحدث أولًا)
   const prodOrderColumns = db.prepare("PRAGMA table_info(products)").all().map(c => c.name);

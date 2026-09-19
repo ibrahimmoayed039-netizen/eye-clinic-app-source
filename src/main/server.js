@@ -183,8 +183,8 @@ function startServer(port, onReady) {
     if (!cat) return res.status(404).json({ error: 'الفئة غير موجودة' });
     try {
       db.prepare('UPDATE categories SET name=? WHERE id=?').run(name.trim(), req.params.id);
-      // حقل الفئة في جدول المنتجات نصّي (اسم الفئة) وليس مفتاحًا خارجيًا، لذا يجب تحديث المنتجات المرتبطة عند إعادة التسمية
-      db.prepare('UPDATE products SET category=? WHERE category=?').run(name.trim(), cat.name);
+      // ملاحظة: المنتجات مرتبطة الآن بـ category_id، فإعادة التسمية تنعكس تلقائيًا
+      // على عرضها دون الحاجة لتحديث نصّي بالاسم (وتجنبًا لخلط فروع متشابهة الاسم)
       broadcast('categories'); broadcast('products');
       res.json({ ok: true, name: name.trim() });
     } catch (err) {
@@ -221,24 +221,44 @@ function startServer(port, onReady) {
 
   // ---------- المنتجات ----------
   app.get('/api/products', (req, res) => {
-    res.json(getDb().prepare('SELECT * FROM products ORDER BY sort_order ASC, id ASC').all());
+    const db = getDb();
+    const cats = db.prepare('SELECT * FROM categories').all();
+    const catById = new Map(cats.map(c => [c.id, c]));
+    const rows = db.prepare('SELECT * FROM products ORDER BY sort_order ASC, id ASC').all();
+    // نعيد بناء اسم الفئة المعروض من category_id دائمًا (بدل الاعتماد على النص المخزَّن)
+    // حتى تظهر الفروع المتشابهة الاسم بوضوح: "الفئة الرئيسية / اسم الفرع"
+    const withCategoryLabel = rows.map(p => {
+      let categoryLabel = p.category || '';
+      const cat = p.category_id ? catById.get(p.category_id) : null;
+      if (cat) {
+        const parent = cat.parent_id ? catById.get(cat.parent_id) : null;
+        categoryLabel = parent ? `${parent.name} / ${cat.name}` : cat.name;
+      }
+      return { ...p, category: categoryLabel };
+    });
+    res.json(withCategoryLabel);
   });
   app.post('/api/products', (req, res) => {
-    const { name, category, barcode, price, cost, stock_qty } = req.body;
+    const { name, category_id, barcode, price, cost, stock_qty } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'اسم المنتج مطلوب' });
     if (Number(price) < 0 || Number(cost) < 0 || Number(stock_qty) < 0) return res.status(400).json({ error: 'لا يمكن أن يكون السعر أو التكلفة أو الكمية بقيمة سالبة' });
     const db = getDb();
+    const catId = category_id ? Number(category_id) : null;
+    const cat = catId ? db.prepare('SELECT * FROM categories WHERE id=?').get(catId) : null;
     const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order),0) m FROM products').get();
-    const info = db.prepare('INSERT INTO products (name, category, barcode, price, cost, stock_qty, sort_order) VALUES (?,?,?,?,?,?,?)')
-      .run(name.trim(), category, barcode, price || 0, cost || 0, stock_qty || 0, maxOrder.m + 1);
+    const info = db.prepare('INSERT INTO products (name, category, category_id, barcode, price, cost, stock_qty, sort_order) VALUES (?,?,?,?,?,?,?,?)')
+      .run(name.trim(), cat ? cat.name : '', catId, barcode, price || 0, cost || 0, stock_qty || 0, maxOrder.m + 1);
     broadcast('products'); res.json({ id: info.lastInsertRowid });
   });
   app.put('/api/products/:id', (req, res) => {
-    const { name, category, barcode, price, cost, stock_qty } = req.body;
+    const { name, category_id, barcode, price, cost, stock_qty } = req.body;
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'اسم المنتج مطلوب' });
     if (Number(price) < 0 || Number(cost) < 0 || Number(stock_qty) < 0) return res.status(400).json({ error: 'لا يمكن أن يكون السعر أو التكلفة أو الكمية بقيمة سالبة' });
-    getDb().prepare('UPDATE products SET name=?, category=?, barcode=?, price=?, cost=?, stock_qty=? WHERE id=?')
-      .run(name.trim(), category, barcode, price, cost, stock_qty, req.params.id);
+    const db = getDb();
+    const catId = category_id ? Number(category_id) : null;
+    const cat = catId ? db.prepare('SELECT * FROM categories WHERE id=?').get(catId) : null;
+    db.prepare('UPDATE products SET name=?, category=?, category_id=?, barcode=?, price=?, cost=?, stock_qty=? WHERE id=?')
+      .run(name.trim(), cat ? cat.name : '', catId, barcode, price, cost, stock_qty, req.params.id);
     broadcast('products'); res.json({ ok: true });
   });
   app.put('/api/products/:id/move', (req, res) => {

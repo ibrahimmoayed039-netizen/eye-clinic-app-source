@@ -27,7 +27,7 @@ async function loadProducts() {
   const cat = document.getElementById('pr-category-filter')?.value || '';
   let filtered = rows;
   if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search) || (p.barcode || '').includes(search));
-  if (cat) filtered = filtered.filter(p => p.category === cat);
+  if (cat) filtered = filtered.filter(p => p.category_id === Number(cat));
 
   const box = document.getElementById('products-table');
   if (!filtered.length) { box.innerHTML = '<div class="empty">لا توجد منتجات بعد</div>'; return; }
@@ -217,12 +217,13 @@ async function deleteCategory(id, childrenCount) {
   }
 }
 
-function categoryOptionsHtml(cats, selectedName) {
+function categoryOptionsHtml(cats, selectedId) {
   const mains = cats.filter(c => !c.parent_id);
+  const sel = selectedId === '' || selectedId === null || selectedId === undefined ? '' : Number(selectedId);
   return mains.map(m => {
     const children = cats.filter(c => c.parent_id === m.id);
-    const own = `<option value="${m.name}" ${selectedName === m.name ? 'selected' : ''}>${m.name}</option>`;
-    const branches = children.map(c => `<option value="${c.name}" ${selectedName === c.name ? 'selected' : ''}>&nbsp;&nbsp;└ ${c.name}</option>`).join('');
+    const own = `<option value="${m.id}" ${sel === m.id ? 'selected' : ''}>${m.name}</option>`;
+    const branches = children.map(c => `<option value="${c.id}" ${sel === c.id ? 'selected' : ''}>&nbsp;&nbsp;└ ${c.name}</option>`).join('');
     return own + branches;
   }).join('');
 }
@@ -234,13 +235,13 @@ async function addCategoryInline() {
     ALL_CATEGORIES_CACHE.push(cat);
     const select = document.getElementById('pf-category');
     const opt = document.createElement('option');
-    opt.value = cat.name; opt.textContent = cat.name; opt.selected = true;
+    opt.value = cat.id; opt.textContent = cat.name; opt.selected = true;
     select.appendChild(opt);
   }).catch(err => showAlertModal('تعذر إضافة الفئة: ' + err.message));
 }
 
 async function openProductModal(id) {
-  let p = { name: '', category: '', barcode: '', price: 0, cost: 0, stock_qty: 0 };
+  let p = { name: '', category_id: null, barcode: '', price: 0, cost: 0, stock_qty: 0 };
   if (id) p = ALL_PRODUCTS_CACHE.find(x => x.id === id) || p;
   const cats = ALL_CATEGORIES_CACHE.length ? ALL_CATEGORIES_CACHE : await API.get('/api/categories');
 
@@ -255,7 +256,7 @@ async function openProductModal(id) {
           <div style="display:flex;gap:6px">
             <select id="pf-category" style="flex:1">
               <option value="">بدون فئة</option>
-              ${categoryOptionsHtml(cats, p.category)}
+              ${categoryOptionsHtml(cats, p.category_id)}
             </select>
             <button type="button" class="btn small secondary" onclick="addCategoryInline()">+</button>
           </div>
@@ -275,9 +276,10 @@ async function openProductModal(id) {
 }
 
 async function saveProduct(id) {
+  const catVal = document.getElementById('pf-category').value;
   const data = {
     name: document.getElementById('pf-name').value.trim(),
-    category: document.getElementById('pf-category').value,
+    category_id: catVal ? Number(catVal) : null,
     barcode: document.getElementById('pf-barcode').value.trim(),
     stock_qty: parseInt(document.getElementById('pf-stock').value) || 0,
     price: unformatNumber(document.getElementById('pf-price').value),

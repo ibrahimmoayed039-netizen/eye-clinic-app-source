@@ -189,7 +189,7 @@ function loadPurchaseProductGrid() {
   const cat = document.getElementById('pu-product-category')?.value || '';
   let filtered = PURCHASES_PRODUCTS_CACHE;
   if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search));
-  if (cat) filtered = filtered.filter(p => p.category === cat);
+  if (cat) filtered = filtered.filter(p => p.category_id === Number(cat));
   const box = document.getElementById('purchase-product-grid');
   if (!filtered.length) { box.innerHTML = '<div class="empty" style="grid-column:1/-1">لا توجد منتجات مطابقة</div>'; return; }
   box.innerHTML = filtered.map(p => `
